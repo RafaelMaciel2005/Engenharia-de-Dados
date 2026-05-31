@@ -1,0 +1,1 @@
+{"tablename":"sqlrunner_sessions","keyFormat":{"type":3},"valueFormat":{"type":4,"classNameParam":"com.dremio.service.sqlrunner.proto.SQLRunnerSessionProto$SQLRunnerSession"},"versionExtractorClassName":""}

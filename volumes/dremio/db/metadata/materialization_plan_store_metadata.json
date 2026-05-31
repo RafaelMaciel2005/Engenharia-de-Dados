@@ -1,0 +1,1 @@
+{"tablename":"materialization_plan_store","keyFormat":{"type":5,"classNameParam":"com.dremio.service.reflection.proto.MaterializationPlanId"},"valueFormat":{"type":5,"classNameParam":"com.dremio.service.reflection.proto.MaterializationPlan"},"versionExtractorClassName":""}
