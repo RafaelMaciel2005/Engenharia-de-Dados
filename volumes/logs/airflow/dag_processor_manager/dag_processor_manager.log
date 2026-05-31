@@ -40,3 +40,6 @@
 [2026-05-31T18:17:10.469+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
 [2026-05-31T18:17:10.472+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
 [2026-05-31T18:22:11.430+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2026-05-31T18:22:11.447+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2026-05-31T18:27:11.447+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2026-05-31T18:27:11.450+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
