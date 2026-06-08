@@ -1,7 +1,6 @@
 pandas== 2.1.4 # manipulação de dados
-boto3== 1.42.70 # Utilizada pelo Airflow para gerenciar o ciclo de vida dos objetos no MinIO
 apache-airflow-providers-oracle== 4.5.1 # adiciona suporte oficial ao Oracle dentro do Airflow
-apache-airflow-providers-amazon == 9.23.0
+apache-airflow-providers-amazon==9.23.0
 pyarrow>=14.0.1 # suporte ao parquet
 apache-airflow-providers-apache-spark== 5.6.0 #conexão com Spark
 requests==2.31.0
