@@ -6,6 +6,7 @@ kaggle_data/
 
 # Credenciais e ambientes virtuais
 .env
+**/.env
 .venv/
 __pycache__/
 .pytest_cache/
