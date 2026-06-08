@@ -1,15 +1,73 @@
-# Arquivos de dados e temporários
+# ==========================================
+# 1. ARQUIVOS TEMPORÁRIOS E DADOS (KAGGLE / OLIST)
+# ==========================================
+# Ignora a pasta temporária de downloads em qualquer nível do projeto
+**/kaggle_data/
 /tmp/
-kaggle_data/
+
+# Ignora bases de dados brutas ou extraídas (arquivos pesados)
 *.csv
 *.zip
+*.json
+*.parquet
+*.avro
+*.orc
 
-# Credenciais e ambientes virtuais
-.env
+# ==========================================
+# 2. SEGURANÇA E CREDENCIAIS (NUNCA SUBIR)
+# ==========================================
+# Ignora arquivos de ambiente em qualquer subpasta (Docker, Airflow, etc.)
 **/.env
-.venv/
-__pycache__/
-.pytest_cache/
+**/*.env
+**/*.env.local
 
-# Docker e volumes locais
+# Chaves de API, tokens e arquivos de configuração sensíveis
+**/kaggle.json
+**/*.pem
+**/*.key
+**/*.pub
+
+# ==========================================
+# 3. DOCKER E VOLUMES LOCAIS
+# ==========================================
+# Ignora os dados persistidos localmente pelo MinIO, Postgres ou Airflow nos volumes do Docker
+**/volumes/
 .docker/
+
+# Ignora logs gerados pelos containers
+**/logs/
+**/*.log
+
+# ==========================================
+# 4. PYTHON (AIRFLOW & SPARK)
+# ==========================================
+# Arquivos compilados do Python (as pastas __pycache__ que vimos no seu print)
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ambientes virtuais locais
+.venv/
+venv/
+ENV/
+env/
+
+# Arquivos de distribuição e build do Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# ==========================================
+# 5. JUPYTER NOTEBOOKS
+# ==========================================
+# Ignora checkpoints automáticos do Jupyter
+**/.ipynb_checkpoints/
+
+# ==========================================
+# 6. SISTEMA OPERACIONAL (WINDOWS / MAC)
+# ==========================================
+Thumbs.db
+Desktop.ini
+.DS_Store
