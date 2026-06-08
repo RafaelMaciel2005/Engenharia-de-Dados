@@ -1,3 +1,14 @@
+# Arquivos de dados e temporários
+/tmp/
+kaggle_data/
+*.csv
+*.zip
+
+# Credenciais e ambientes virtuais
 .env
-volumes/
-lakehouse/
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Docker e volumes locais
+.docker/
