@@ -113,7 +113,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - ${PROJECT_ROOT}/volumes/minio:/data # This creates the folder in the unidata_compose structure
+      - ${PROJECT_ROOT}/lakehouse:/data 
     command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]

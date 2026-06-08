@@ -1,3 +1,2 @@
-boto3== 1.42.70 # Utilizada pelo Airflow para gerenciar o ciclo de vida dos objetos no MinIO
-pandas== 3.0.1 # manipulação de dados
+pandas== 3.0.1 # manipulação de dadosdocker
 requests==2.31.0
