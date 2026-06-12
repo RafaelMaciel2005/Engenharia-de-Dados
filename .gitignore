@@ -33,6 +33,7 @@
 # Ignora os dados persistidos localmente pelo MinIO, Postgres ou Airflow nos volumes do Docker
 **/volumes/
 .docker/
+*/.minio.sys/
 
 # Ignora logs gerados pelos containers
 **/logs/
