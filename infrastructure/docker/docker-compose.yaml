@@ -191,6 +191,7 @@ services:
     volumes:
     - ${PROJECT_ROOT}/notebooks:/home/jovyan/work
     environment:
+    - JUPYTER_TOKEN=${JUPYTER_TOKEN}
     - JUPYTER_ENABLE_LAB=yes   
 
 networks:
