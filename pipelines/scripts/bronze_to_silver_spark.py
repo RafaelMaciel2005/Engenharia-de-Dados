@@ -9,7 +9,7 @@ def main():
         .getOrCreate()
     
     input_path = "s3a://bronze/olist/customers"
-    output_path = "s3a//silver/olist/customers"
+    output_path = "s3a://silver/olist/customers"
 
     print(f"Lendo dados da camada Bronze: {input_path}")
 
