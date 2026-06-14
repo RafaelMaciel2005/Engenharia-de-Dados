@@ -1,6 +1,17 @@
 from datetime import datetime
 from airflow import DAG
-from airflow.operators.bash import BashOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+import os
+
+#Coletando o end point do MinIO
+minio_endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
+
+#Configurações Nativas e limpas do S3A para o MINIO
+conf={
+    "spark.hadoop.fs.s3a.endpoint": minio_endpoint,
+    "spark.hadoop.fs.s3a.path.style.access": "true",
+    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+}
 
 default_args = {
     "owner": "rafa-dev",
@@ -12,23 +23,15 @@ with DAG(
     default_args=default_args,
     schedule_interval=None,
     catchup=False
-) as dag:    
-    
-    # Injeção das configurações de infraestrutura via linha de comando
-    comando_spark = """
-    spark-submit \
-      --conf "spark.hadoop.fs.s3a.endpoint=$MINIO_ENDPOINT" \
-      --conf "spark.hadoop.fs.s3a.path.style.access=true" \
-      --conf "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" \
-      /opt/pipelines/scripts/bronze_to_silver_spark.py
-    """
+) as dag:      
 
-    #================================================================
-    # Definindo as Tasks
-    #================================================================
-    task_bronze_to_silver = BashOperator(
-        task_id="bronze_to_silver",
-        bash_command=comando_spark
+    task_bronze_to_silver = SparkSubmitOperator(
+        task_id = "Bronze_to_Silver",
+        conn_id = "spark_default",
+        application = "/opt/pipelines/scripts/bronze_to_silver_spark.py",
+        name = "job_bronze_to_silver",
+        conf = conf,
+        verbose = True
     )
 
     task_bronze_to_silver
