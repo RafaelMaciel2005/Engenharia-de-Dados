@@ -1,6 +1,17 @@
-pandas== 2.1.4 # manipulação de dados
-apache-airflow-providers-oracle== 4.5.1 # adiciona suporte oficial ao Oracle dentro do Airflow
-apache-airflow-providers-amazon==9.23.0
-apache-airflow-providers-apache-spark== 5.6.0 #conexão com Spark
-requests==2.31.0
-pyarrow>=14.0.1 # suporte ao parquet
+pyspark==3.5.1
+
+# Bibliotecas essenciais para manipulação eficiente de dados (essencial para Spark + PyArrow)
+pyarrow==15.0.0
+pandas==2.2.1
+numpy==1.26.4
+
+# Conectores e utilitários para armazenamento de objetos e Lakehouse (MinIO / S3)
+boto3==1.34.50
+botocore==1.34.50
+
+# Integração opcional caso utilize Delta Lake na sua arquitetura Lakehouse
+delta-spark==3.1.0
+
+# Ferramentas extras de suporte e logging
+fsspec==2024.2.0
+s3fs==2024.2.0

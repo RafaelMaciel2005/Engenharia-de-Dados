@@ -14,6 +14,7 @@ x-airflow-common:
     - ${PROJECT_ROOT}/pipelines:/opt/pipelines
     - ${PROJECT_ROOT}/volumes/airflow/logs:/opt/airflow/logs 
     - ${PROJECT_ROOT}/volumes/airflow/plugins:/opt/airflow/plugins  
+    - ${PROJECT_ROOT}/secrets/kaggle.json:/home/airflow/.config/kaggle/kaggle.json
   environment:
     &airflow-common-env    
     AIRFLOW_UID: ${AIRFLOW_UID}
@@ -21,7 +22,8 @@ x-airflow-common:
     AIRFLOW__SCHEDULER__PARSING_PROCESSES: 2
     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
-    AIRFLOW__CORE__DAGS_FOLDER: /opt/pipelines/dags
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/pipelines/dags  
+    PYTHONPATH: /opt/pipelines  
     AIRFLOW__CORE__EXECUTOR: LocalExecutor       
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_USER}
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'   
@@ -110,7 +112,7 @@ services:
       - "9001:9001"
     volumes:
       - ${PROJECT_ROOT}/lakehouse:/data 
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ":9001"       
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s

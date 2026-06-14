@@ -1,2 +1,2 @@
-pandas== 3.0.1 # manipulação de dadosdocker
+pandas== 2.0.3 # manipulação de dadosdocker
 requests==2.31.0
