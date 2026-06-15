@@ -121,8 +121,7 @@ services:
 
   spark-master:
     build: ./spark
-    container_name: spark-master
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    container_name: spark-master    
     user: root # Switch to administrator mode.
     environment:
       - SPARK_MODE=master
@@ -134,14 +133,13 @@ services:
     networks:
       - airflow-network
     volumes:
-      - ${PROJECT_ROOT}/pipelines/scripts:/opt/spark/jobs
+      - ${PROJECT_ROOT}/pipelines/scripts:/app/jobs
 
   spark-worker:
     build: ./spark
     container_name: spark-worker
     depends_on:
-      - spark-master
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+      - spark-master    
     user: root # Switch to administrator mode.
     environment:
       - SPARK_MODE=worker
@@ -151,7 +149,7 @@ services:
     networks:
       - airflow-network  
     volumes:
-      - ${PROJECT_ROOT}/pipelines/scripts:/opt/spark/jobs 
+      - ${PROJECT_ROOT}/pipelines/scripts:/app/jobs
 
   dremio:
     image: dremio/dremio-oss:26.0    
