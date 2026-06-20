@@ -134,6 +134,7 @@ services:
       - airflow-network
     volumes:
       - ${PROJECT_ROOT}/pipelines/scripts:/app/jobs
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
 
   spark-worker:
     build: ./spark
@@ -150,6 +151,7 @@ services:
       - airflow-network  
     volumes:
       - ${PROJECT_ROOT}/pipelines/scripts:/app/jobs
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
 
   dremio:
     image: dremio/dremio-oss:26.0    
