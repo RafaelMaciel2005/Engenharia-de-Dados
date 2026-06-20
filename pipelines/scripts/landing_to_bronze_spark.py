@@ -9,7 +9,7 @@ def main():
         .appName("Landing-to-Bronze-Olist") \
         .getOrCreate()
     
-    input_path = "s3a://landing-zone/vendas/*/*.csv"
+    input_path = "s3a://landing-zone/vendas/*/olist_customers_dataset.csv"
     output_path = "s3a://bronze/olist/customers/"
 
     print(f"Lendo dados brutos de: {input_path}")
