@@ -19,7 +19,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id="landing_to_bronze",
+    dag_id="landing_to_bronze_customers",
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
@@ -28,9 +28,9 @@ with DAG(
     
     # Orquestração do processamento de dados usando o SparkSubmitOperator
     task_landing_to_bronze = SparkSubmitOperator(
-        task_id="Landing_to_Bronze",
+        task_id="Landing_to_Bronze_customers",
         conn_id="spark_default", #O Airflow usará esta conexão (configurada na UI) para achar o Spark Master
-        application="/opt/pipelines/scripts/landing_to_bronze_spark.py",
+        application="/opt/pipelines/scripts/landing_to_bronze_customers.py",
         name="job-landing-to-bronze",       
         conf=conf,
         verbose=True
