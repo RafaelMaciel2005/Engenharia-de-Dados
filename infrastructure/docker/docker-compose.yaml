@@ -117,28 +117,11 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
-      retries: 5
-
-  minio-init:   
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z-cpuv1
-    env_file:    
-    - .env
-    depends_on:
-      minio: { condition: service_healthy }
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};     
-      mc mb --ignore-existing \
-      myminio/bronze \
-      myminio/silver \
-      myminio/gold;
-      exit 0;
-      "
+      retries: 5  
 
   spark-master:
     build: ./spark
-    container_name: spark-master
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    container_name: spark-master    
     user: root # Switch to administrator mode.
     environment:
       - SPARK_MODE=master
@@ -150,14 +133,14 @@ services:
     networks:
       - airflow-network
     volumes:
-      - ${PROJECT_ROOT}/pipelines/scripts:/opt/spark/jobs
+      - ${PROJECT_ROOT}/pipelines/scripts:/app/jobs
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
 
   spark-worker:
     build: ./spark
     container_name: spark-worker
     depends_on:
-      - spark-master
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+      - spark-master    
     user: root # Switch to administrator mode.
     environment:
       - SPARK_MODE=worker
@@ -167,7 +150,8 @@ services:
     networks:
       - airflow-network  
     volumes:
-      - ${PROJECT_ROOT}/pipelines/scripts:/opt/spark/jobs 
+      - ${PROJECT_ROOT}/pipelines/scripts:/app/jobs
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
 
   dremio:
     image: dremio/dremio-oss:26.0    

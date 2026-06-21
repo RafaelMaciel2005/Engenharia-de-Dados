@@ -19,7 +19,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id="bronze_to_silver",
+    dag_id="bronze_to_silver_customers",
     default_args=default_args,
     schedule_interval=None,
     catchup=False
@@ -28,7 +28,7 @@ with DAG(
     task_bronze_to_silver = SparkSubmitOperator(
         task_id = "Bronze_to_Silver",
         conn_id = "spark_default",
-        application = "/opt/pipelines/scripts/bronze_to_silver_spark.py",
+        application = "/opt/pipelines/scripts/bronze_to_silver_customers.py",
         name = "job_bronze_to_silver",
         conf = conf,
         verbose = True
