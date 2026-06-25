@@ -1,5 +1,3 @@
-pyspark==3.5.1
-
 # Bibliotecas essenciais para manipulação eficiente de dados (essencial para Spark + PyArrow)
 pyarrow==15.0.0
 pandas==2.2.1
