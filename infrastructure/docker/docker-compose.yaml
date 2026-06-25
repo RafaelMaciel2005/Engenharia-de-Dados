@@ -31,7 +31,6 @@ x-airflow-common:
   networks:          
     - airflow-network   
   
-
 services:
   postgres:
     image: postgres:15.10-alpine    
@@ -65,10 +64,8 @@ services:
   airflow-init:
     <<: *airflow-common    
     user: "0:0"    
-    # 'db migrate' is much safer and more reliable than 'version' for initialization
     command: >      
       bash -c "chown -R 50000:0 /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins && airflow db migrate"
-    # command: version
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
@@ -122,7 +119,7 @@ services:
   spark-master:
     build: ./spark
     container_name: spark-master    
-    user: root # Switch to administrator mode.
+    # user: root # Removido para usar o sparkuser do Dockerfile (descomente se tiver erro de permissão no volume)
     environment:
       - SPARK_MODE=master
     env_file:
@@ -133,7 +130,7 @@ services:
     networks:
       - airflow-network
     volumes:
-      - ${PROJECT_ROOT}/pipelines/scripts:/app/jobs
+      - ${PROJECT_ROOT}/pipelines/scripts:/opt/spark/jobs # Ajustado para um diretório dentro do SPARK_HOME
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
 
   spark-worker:
@@ -141,16 +138,18 @@ services:
     container_name: spark-worker
     depends_on:
       - spark-master    
-    user: root # Switch to administrator mode.
+    # user: root # Removido para usar o sparkuser do Dockerfile
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2   # IMPLEMENTAÇÃO: Limite de CPU para o worker
+      - SPARK_WORKER_MEMORY=2G # IMPLEMENTAÇÃO: Limite de RAM para o worker
     env_file:
       - .env
     networks:
       - airflow-network  
     volumes:
-      - ${PROJECT_ROOT}/pipelines/scripts:/app/jobs
+      - ${PROJECT_ROOT}/pipelines/scripts:/opt/spark/jobs
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
 
   dremio:
@@ -165,20 +164,29 @@ services:
     - airflow-network
     volumes:
     - ${PROJECT_ROOT}/volumes/dremio:/opt/dremio/data   
-    #command: chown -R 1000:1000 /opt/dremio/data 
     restart: always
 
   jupyter:
-    build: ./jupyter
+    image: jupyter/pyspark-notebook:spark-3.5.0 # IMPORTANTE: Tente manter esta versão idêntica à do Dockerfile (ex: 3.5.1)
+    container_name: jupyter_workspace
+    user: root 
     ports:
-    - "8888:8888"
+      - "8888:8888"
+      - "4040:4040" 
     networks:
-    - airflow-network
+      - airflow-network
     volumes:
-    - ${PROJECT_ROOT}/notebooks:/home/jovyan/work
+      - ${PROJECT_ROOT}/notebooks:/home/jovyan/work
     environment:
-    - JUPYTER_TOKEN=${JUPYTER_TOKEN}
-    - JUPYTER_ENABLE_LAB=yes   
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN}
+      - JUPYTER_ENABLE_LAB=yes
+      - GRANT_SUDO=yes
+      # IMPLEMENTAÇÃO: Garante que o Jupyter baixe os Jars necessários para falar com o MinIO
+      - PYSPARK_SUBMIT_ARGS=--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 pyspark-shell
+      # IMPLEMENTAÇÃO: Variáveis de ambiente para o notebook ler o .env
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_ENDPOINT=http://minio:9000
 
 networks:
   airflow-network:
