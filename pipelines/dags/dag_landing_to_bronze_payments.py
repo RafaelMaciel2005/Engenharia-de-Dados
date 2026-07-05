@@ -1,17 +1,6 @@
-import os
 from datetime import datetime
 from airflow import DAG
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
-
-minio_endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
-
-# Configurações nativas e limpas do conector S3A
-
-conf={
-    "spark.hadoop.fs.s3a.endpoint": minio_endpoint,
-    "spark.hadoop.fs.s3a.path.style.access": "true",
-    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
-}
 
 default_args={
     "owner": "rafa-dev",
@@ -31,7 +20,6 @@ with DAG(
         conn_id="spark_default", #O Airflow usará esta conexão (configurada na UI)
         application="/opt/pipelines/scripts/landing_to_bronze_payments.py",
         name="job-landing-to-bronze",
-        conf=conf,
         verbose=True
     )
 
