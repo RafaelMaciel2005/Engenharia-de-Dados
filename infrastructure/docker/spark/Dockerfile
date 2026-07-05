@@ -1,52 +1,51 @@
-FROM python:3.11-slim-bookworm
+# 1. Imagem base leve com Java 17 (LTS)
+FROM eclipse-temurin:17-jre-jammy
 
-# Evita prompts interativos durante a instalação de pacotes
-ENV DEBIAN_FRONTEND=noninteractive
+# 2. Definir variáveis de versão
+ARG SPARK_VERSION=3.5.1
+ARG HADOOP_VERSION=3
+# A versão do Hadoop AWS deve ser compatível com a versão do Hadoop embutida no Spark
+ARG HADOOP_AWS_VERSION=3.3.4
+ARG AWS_SDK_VERSION=1.12.262
 
-# Instalação de dependências essenciais do sistema e Java 17 (obrigatório para Spark 3.5+)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        openjdk-17-jre-headless \
-        curl \
-        wget \
-        procps \
-        && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# 3. Instalar dependências do sistema operacional
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    bash \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Configuração das Variáveis de Ambiente Globais (Java e Spark)
-ENV JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
-ENV SPARK_VERSION=3.5.1
-ENV HADOOP_VERSION=3
-ENV SPARK_HOME="/opt/spark"
-ENV PATH="${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}"
+# 4. Baixar e instalar o Apache Spark
+RUN curl -O https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+    && tar -xvzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+    && mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} /opt/spark \
+    && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
 
-# Configuração do PYTHONPATH para garantir que o Python encontre as libs do PySpark
-ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.9.7-src.zip:${PYTHONPATH}"
+# 5. Configurar variáveis de ambiente do Spark
+ENV SPARK_HOME=/opt/spark
+ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
+ENV PYSPARK_PYTHON=python3
 
-# Download e instalação do Apache Spark pré-compilado com Hadoop 3
-RUN wget -q https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz -O /tmp/spark.tgz && \
-    mkdir -p /opt && \
-    tar -xzf /tmp/spark.tgz -C /opt && \
-    mv /opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME} && \
-    rm /tmp/spark.tgz
+# 6. Baixar Jars essenciais para comunicação com o MinIO (S3A)
+# Esses jars são colocados diretamente na pasta de jars padrão do Spark
+RUN wget  https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar -P $SPARK_HOME/jars/ && \
+    wget  https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar -P $SPARK_HOME/jars/
 
-# ==============================================================================
-# DOWNLOAD DOS JARS DE INTEGRAÇÃO COM MINIO (S3A)
-# ==============================================================================
-RUN mkdir -p ${SPARK_HOME}/jars && \
-    curl -sS -o ${SPARK_HOME}/jars/hadoop-aws-3.3.4.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
-    curl -sS -o ${SPARK_HOME}/jars/aws-java-sdk-bundle-1.12.262.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar
+# Copiar o arquivo de dependências para dentro da imagem
+COPY requirements.txt /tmp/
 
-# Configura o diretório de trabalho padrão do container
-WORKDIR /app
+# Instalar as bibliotecas Python
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt    
 
-# Copia e instala os requerimentos do Python (garantindo PySpark idêntico)
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# 7. Criar diretório de trabalho e usuário não-root (Boas práticas de segurança)
+RUN useradd -ms /bin/bash sparkuser
+RUN chown -R sparkuser:sparkuser /opt/spark
 
-# Portas padrão expostas para comunicação e monitoramento da UI do Spark
-EXPOSE 4040 8080 7077
+USER sparkuser
+WORKDIR /opt/spark
 
-# Comando padrão (pode ser sobrescrito no docker-compose para subir como Master ou Worker)
-CMD ["spark-class", "org.apache.spark.deploy.master.Master"]
+# O comando padrão iniciará o bash, mas no docker-compose você substituirá
+# chamando arquivos específicos de master/worker ou submetendo jobs.
+CMD ["/bin/bash"]

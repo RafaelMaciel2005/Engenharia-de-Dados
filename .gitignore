@@ -35,6 +35,19 @@
 .docker/
 **/.minio.sys/
 
+# Lakehouse (bind mount local do MinIO): ignora todo o conteúdo real dos dados
+# (parquet, _SUCCESS, metadados internos xl.meta, etc.), mantendo apenas os
+# .gitkeep que preservam a estrutura de pastas versionada no repositório
+lakehouse/**
+!lakehouse/landing-zone/
+!lakehouse/landing-zone/.gitkeep
+!lakehouse/bronze/
+!lakehouse/bronze/.gitkeep
+!lakehouse/silver/
+!lakehouse/silver/.gitkeep
+!lakehouse/gold/
+!lakehouse/gold/.gitkeep
+
 # Ignora logs gerados pelos containers
 **/logs/
 **/*.log
