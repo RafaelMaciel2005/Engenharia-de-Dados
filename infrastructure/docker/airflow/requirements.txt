@@ -1,4 +1,3 @@
-apache-airflow-providers-oracle== 4.5.1 # adiciona suporte oficial ao Oracle dentro do Airflow
 apache-airflow-providers-amazon==9.23.0
 apache-airflow-providers-apache-spark== 4.8.0 #conexão com Spark
 pyspark==3.5.1

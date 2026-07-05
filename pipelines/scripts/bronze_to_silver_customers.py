@@ -25,6 +25,7 @@ def main():
     #Salvando na camada Silver
     df_silver.write.mode("overwrite").parquet(output_path)
     print("Dados gravados com sucesso na camada Silver!")
-    
+    spark.stop()
+
 if __name__ == "__main__":
     main()
