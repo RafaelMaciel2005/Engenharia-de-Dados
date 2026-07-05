@@ -191,6 +191,7 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 - [x] Pipeline Landing → Bronze para as 9 entidades do dataset Olist
 - [x] Pipeline Bronze → Silver para a entidade `customers`
 - [x] Boas práticas de segredo: `.env` e credenciais fora do versionamento, com `.env.example` de referência
+- [x] Sem credenciais hardcoded em código: criação da `SparkSession` centralizada em `utils/spark_utils.py`, lida via variáveis de ambiente, usada tanto pelos jobs do Airflow quanto pelo notebook; conexões `spark_default`/`minio_default` definidas via `AIRFLOW_CONN_*` no `.env`
 
 ### 🚧 Em andamento
 

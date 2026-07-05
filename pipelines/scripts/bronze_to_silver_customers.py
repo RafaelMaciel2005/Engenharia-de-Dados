@@ -1,12 +1,9 @@
-from pyspark.sql import SparkSession
 from pyspark.sql.functions import current_timestamp, col, trim, upper, lower
+from utils.spark_utils import create_spark_session
 
 def main():
 
-    #SparkSession limpa
-    spark = SparkSession.builder \
-        .appName("Bronze-to-Silver-Olist") \
-        .getOrCreate()
+    spark = create_spark_session("Bronze-to-Silver-Olist")
     
     input_path = "s3a://bronze/olist/customers"
     output_path = "s3a://silver/olist/customers"

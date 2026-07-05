@@ -1,13 +1,10 @@
-from pyspark.sql import SparkSession
 from pyspark.sql.functions import current_timestamp
+from utils.spark_utils import create_spark_session
 
 def main():
     print("Iniciando processamento Spark: Landing to Bronze...")
 
-    # SparkSession 100% limpa. 
-    spark = SparkSession.builder \
-        .appName("Landing-to-Bronze-categoryname") \
-        .getOrCreate()
+    spark = create_spark_session("Landing-to-Bronze-categoryname")
     
     input_path = "s3a://landing-zone/vendas/*/product_category_name_translation.csv"
     output_path = "s3a://bronze/olist/category_name/"
