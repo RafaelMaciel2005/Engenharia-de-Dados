@@ -23,6 +23,7 @@ O objetivo do projeto é praticar e demonstrar, com uma stack próxima da usada 
 - [Sobre os dados](#sobre-os-dados)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Como rodar o projeto](#como-rodar-o-projeto)
+- [Documentação](#documentação)
 - [Status &amp; Roadmap](#status--roadmap)
 - [Decisões técnicas](#decisões-técnicas)
 - [Autor](#autor)
@@ -44,6 +45,7 @@ flowchart LR
         A1[DAG: kaggle_to_landing]
         A2[DAG: landing_to_bronze<br/>1 task por tabela]
         A3[DAG: bronze_to_silver<br/>1 task por tabela]
+        A4[DAG: silver_to_gold<br/>1 task por dim/fato]
     end
 
     subgraph Lakehouse ["Data Lake — MinIO (S3 compatível)"]
@@ -65,9 +67,11 @@ flowchart LR
     B --> A3
     A3 -->|processa via| P
     P --> S
-    S -.->|em construção| G
+    S --> A4
+    A4 -->|processa via| P
+    P --> G
     S --> D
-    G -.-> D
+    G --> D
     P -.dev/testes.-> J
 ```
 
@@ -76,7 +80,7 @@ flowchart LR
 1. **Extração** — uma DAG do Airflow baixa o dataset [Olist Brazilian E-commerce](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) via API do Kaggle e envia os CSVs para a **Landing Zone** no MinIO, particionados por data de ingestão (`ingestion_date=YYYY-MM-DD`).
 2. **Landing → Bronze** — uma DAG genérica gera dinamicamente uma task Spark por tabela (clientes, pedidos, itens, pagamentos, avaliações, produtos, vendedores, geolocalização, categorias) a partir de um registro central de configuração. Cada task lê o CSV bruto e grava em **Parquet** na camada Bronze, preservando o dado original e adicionando apenas metadados técnicos (timestamp de processamento).
 3. **Bronze → Silver** — mesma estrutura genérica: um único script Spark aplica a regra de tratamento específica de cada tabela (limpeza, padronização de tipos, trim/normalização de texto), definida em um registro de transformações (`silver_rules.py`), gravando o resultado em Parquet na camada Silver.
-4. **Silver → Gold** *(em construção)* — modelagem dimensional (fatos e dimensões) orientada a perguntas de negócio (receita por região, ticket médio, prazo de entrega, performance de vendedores).
+4. **Silver → Gold** — mesma estrutura genérica gera as dimensões e fatos do **modelo dimensional (star schema)** a partir de um registro de objetos (`gold_objects.py`) e um registro de regras de construção (`gold_rules.py`). São **4 dimensões** (`dim_cliente`, `dim_produto`, `dim_vendedor`, `dim_tempo`) e **3 fatos de grãos separados** (`fato_pedidos_itens`, `fato_pagamentos`, `fato_avaliacoes`) — a separação evita o *fan-out* (contagem duplicada de receita) que ocorreria ao juntar itens e pagamentos numa tabela só. Responde perguntas como receita por região, ticket médio, prazo/atraso de entrega e impacto do atraso na avaliação.
 5. **Consumo** — a camada analítica é exposta via **Dremio**, que atua como motor de consulta SQL sobre o data lake, permitindo consumo direto por ferramentas de BI.
 6. **Jupyter** é usado como ambiente de sandbox para prototipar as transformações Spark antes de promovê-las para scripts de produção.
 
@@ -112,22 +116,23 @@ Os dados brutos **não são versionados neste repositório** (ver `.gitignore`);
 ```
 .
 ├── infrastructure/
-│   └── docker/
-│       ├── airflow/          # Dockerfile e requirements do Airflow (+ Spark client, Java 17)
-│       ├── spark/            # Dockerfile e requirements do cluster Spark
-│       └── docker-compose.yaml
+│   ├── docker/
+│   │   ├── airflow/           # Dockerfile e requirements do Airflow (+ Spark client, Java 17)
+│   │   ├── spark/             # Dockerfile e requirements do cluster Spark
+│   │   └── docker-compose.yaml
+│   └── kubernetes/            # Reservado para manifests de deploy em K8s (futuro)
 ├── pipelines/
-│   ├── config/               # Registro central das tabelas (nome -> CSV de origem)
-│   ├── dags/                 # DAGs genéricas: geram 1 task por tabela a partir da config
-│   └── scripts/              # Jobs PySpark genéricos + regras de tratamento por tabela (silver_rules.py)
+│   ├── config/               # Registros centrais: tabelas (tabelas_olist.py) e objetos Gold (gold_objects.py)
+│   ├── dags/                 # DAGs genéricas: geram 1 task por tabela/objeto a partir da config
+│   └── scripts/              # Jobs PySpark genéricos + regras de transformação (silver_rules.py, gold_rules.py)
 ├── notebooks/
-│   ├── bronze/                # Sandbox de prototipagem (Landing → Bronze)
-│   ├── silver/                # Sandbox de prototipagem por tabela (Bronze → Silver)
-│   └── gold/                  # Sandbox de modelagem (Silver → Gold)
-├── lakehouse/                 # Bind mount local do MinIO (landing-zone / bronze / silver / gold)
-├── utils/                     # Funções utilitárias compartilhadas entre jobs Spark
-├── secrets/                   # Credenciais locais não versionadas (ex: kaggle.json)
-└── infrastructure/kubernetes/ # Reservado para manifests de deploy em K8s (futuro)
+│   ├── bronze/               # Sandbox de prototipagem (Landing → Bronze)
+│   ├── silver/               # Sandbox de prototipagem por tabela (Bronze → Silver)
+│   └── gold/                 # Sandbox de modelagem (Silver → Gold)
+├── docs/                     # Documentação técnica (decisões, desafios, modelo dimensional)
+├── lakehouse/                # Bind mount local do MinIO (landing-zone / bronze / silver / gold)
+├── utils/                    # Funções utilitárias compartilhadas entre jobs Spark
+└── secrets/                  # Credenciais locais não versionadas (ex: kaggle.json)
 ```
 
 ---
@@ -179,6 +184,19 @@ No Airflow, dispare as DAGs manualmente na seguinte ordem (ainda não há uma DA
 1. `kaggle_to_landing_zone`
 2. `landing_to_bronze` (gera 1 task por tabela automaticamente)
 3. `bronze_to_silver` (idem, aplicando as regras de tratamento de cada tabela)
+4. `silver_to_gold` (gera 1 task por dimensão/fato do modelo dimensional)
+
+---
+
+## Documentação
+
+Além deste README, a pasta [`docs/`](docs/) reúne a documentação técnica aprofundada — o **porquê** das escolhas e os problemas reais enfrentados no caminho:
+
+| Documento | Conteúdo |
+|---|---|
+| [Decisões Arquiteturais](docs/decisoes-arquiteturais.md) | Registro (formato ADR) das principais escolhas: arquitetura Medalhão, DAGs genéricas, fatos separados, MinIO/Dremio/Parquet, credenciais, etc. — com contexto e trade-offs de cada uma. |
+| [Desafios Técnicos](docs/desafios-tecnicos.md) | Problemas reais e como foram resolvidos: corrupção do Postgres em bind mount no Windows, CSV multilinha do `reviews`, fan-out entre itens e pagamentos, a pegadinha do `customer_unique_id`, e outros. |
+| [Modelo Dimensional](docs/modelo-dimensional.md) | Documentação do star schema da camada Gold: grão de cada fato, dimensões, linhagem e queries de negócio com **resultados reais** (receita por estado, impacto do atraso na avaliação). |
 
 ---
 
@@ -193,12 +211,12 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 - [x] Pipeline Landing → Bronze para as 9 entidades do dataset Olist
 - [x] Pipeline Bronze → Silver para as 9 entidades, com regras de tratamento específicas por tabela
 - [x] DAGs e scripts genéricos: 1 DAG por camada gera as tasks dinamicamente a partir de um registro central de configuração (adicionar tabela nova = 1 linha de config, não um arquivo novo)
+- [x] Camada Gold com modelagem dimensional (star schema): 4 dimensões (`dim_cliente`, `dim_produto`, `dim_vendedor`, `dim_tempo`) e 3 fatos de grãos separados (`fato_pedidos_itens`, `fato_pagamentos`, `fato_avaliacoes`) para evitar fan-out entre itens e pagamentos
 - [x] Boas práticas de segredo: `.env` e credenciais fora do versionamento, com `.env.example` de referência
 - [x] Sem credenciais hardcoded em código: criação da `SparkSession` centralizada em `utils/spark_utils.py`, lida via variáveis de ambiente, usada tanto pelos jobs do Airflow quanto pelo notebook; conexões `spark_default`/`minio_default` definidas via `AIRFLOW_CONN_*` no `.env`
 
 ### 🚧 Em andamento
 
-- [ ] Camada Gold com modelagem dimensional (fato de pedidos + dimensões de cliente, produto, vendedor, tempo)
 - [ ] DAG mestre orquestrando as camadas com dependências e agendamento reais (hoje cada DAG é disparada manualmente e isoladamente)
 - [ ] Testes de qualidade de dados (schema, nulos, duplicidade) integrados ao pipeline
 
@@ -219,6 +237,8 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 - **Por que Spark em cluster standalone (Master/Worker) em vez de modo local?** Para reproduzir o comportamento de submissão de jobs (`SparkSubmitOperator`) e paralelismo real entre driver e workers, mais próximo de um ambiente produtivo do que `local[*]`.
 - **Por que Parquet em todas as camadas intermediárias?** Formato colunar, comprimido e com schema embutido — leitura mais eficiente que CSV para os jobs Spark subsequentes, e padrão de mercado para data lakes.
 - **Por que Dremio na camada de consumo?** Permite consultar os dados do Lakehouse via SQL sem duplicar dados em um data warehouse, e federar múltiplas fontes no futuro.
+
+> 📖 O detalhamento completo dessas e de outras decisões (com contexto e trade-offs) está em [`docs/decisoes-arquiteturais.md`](docs/decisoes-arquiteturais.md).
 
 ---
 
