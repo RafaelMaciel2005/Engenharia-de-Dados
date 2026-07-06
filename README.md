@@ -42,8 +42,8 @@ flowchart LR
     subgraph Orquestração ["Orquestração — Apache Airflow"]
         direction TB
         A1[DAG: kaggle_to_landing]
-        A2[DAGs: landing_to_bronze_*]
-        A3[DAG: bronze_to_silver_*]
+        A2[DAG: landing_to_bronze<br/>1 task por tabela]
+        A3[DAG: bronze_to_silver<br/>1 task por tabela]
     end
 
     subgraph Lakehouse ["Data Lake — MinIO (S3 compatível)"]
@@ -74,8 +74,8 @@ flowchart LR
 **Fluxo resumido:**
 
 1. **Extração** — uma DAG do Airflow baixa o dataset [Olist Brazilian E-commerce](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) via API do Kaggle e envia os CSVs para a **Landing Zone** no MinIO, particionados por data de ingestão (`ingestion_date=YYYY-MM-DD`).
-2. **Landing → Bronze** — jobs Spark, disparados por DAGs individuais (uma por entidade: clientes, pedidos, itens, pagamentos, avaliações, produtos, vendedores, geolocalização, categorias), leem o CSV bruto e gravam em **Parquet** na camada Bronze, preservando o dado original e adicionando apenas metadados técnicos (timestamp de processamento).
-3. **Bronze → Silver** — jobs Spark aplicam limpeza, padronização de tipos, trim/normalização de texto e regras básicas de qualidade, gravando o resultado em Parquet na camada Silver.
+2. **Landing → Bronze** — uma DAG genérica gera dinamicamente uma task Spark por tabela (clientes, pedidos, itens, pagamentos, avaliações, produtos, vendedores, geolocalização, categorias) a partir de um registro central de configuração. Cada task lê o CSV bruto e grava em **Parquet** na camada Bronze, preservando o dado original e adicionando apenas metadados técnicos (timestamp de processamento).
+3. **Bronze → Silver** — mesma estrutura genérica: um único script Spark aplica a regra de tratamento específica de cada tabela (limpeza, padronização de tipos, trim/normalização de texto), definida em um registro de transformações (`silver_rules.py`), gravando o resultado em Parquet na camada Silver.
 4. **Silver → Gold** *(em construção)* — modelagem dimensional (fatos e dimensões) orientada a perguntas de negócio (receita por região, ticket médio, prazo de entrega, performance de vendedores).
 5. **Consumo** — a camada analítica é exposta via **Dremio**, que atua como motor de consulta SQL sobre o data lake, permitindo consumo direto por ferramentas de BI.
 6. **Jupyter** é usado como ambiente de sandbox para prototipar as transformações Spark antes de promovê-las para scripts de produção.
@@ -117,10 +117,12 @@ Os dados brutos **não são versionados neste repositório** (ver `.gitignore`);
 │       ├── spark/            # Dockerfile e requirements do cluster Spark
 │       └── docker-compose.yaml
 ├── pipelines/
-│   ├── dags/                 # Definições das DAGs do Airflow
-│   └── scripts/              # Jobs PySpark executados pelas DAGs (SparkSubmitOperator)
+│   ├── config/               # Registro central das tabelas (nome -> CSV de origem)
+│   ├── dags/                 # DAGs genéricas: geram 1 task por tabela a partir da config
+│   └── scripts/              # Jobs PySpark genéricos + regras de tratamento por tabela (silver_rules.py)
 ├── notebooks/
-│   ├── silver/                # Sandbox de prototipagem (Bronze → Silver)
+│   ├── bronze/                # Sandbox de prototipagem (Landing → Bronze)
+│   ├── silver/                # Sandbox de prototipagem por tabela (Bronze → Silver)
 │   └── gold/                  # Sandbox de modelagem (Silver → Gold)
 ├── lakehouse/                 # Bind mount local do MinIO (landing-zone / bronze / silver / gold)
 ├── utils/                     # Funções utilitárias compartilhadas entre jobs Spark
@@ -175,8 +177,8 @@ docker compose up -d --build
 No Airflow, dispare as DAGs manualmente na seguinte ordem (ainda não há uma DAG "mestre" — ver [Roadmap](#status--roadmap)):
 
 1. `kaggle_to_landing_zone`
-2. `landing_to_bronze_*` (uma por entidade)
-3. `bronze_to_silver_customers`
+2. `landing_to_bronze` (gera 1 task por tabela automaticamente)
+3. `bronze_to_silver` (idem, aplicando as regras de tratamento de cada tabela)
 
 ---
 
@@ -189,12 +191,13 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 - [x] Ambiente containerizado completo (Airflow, Spark, MinIO, Dremio, Postgres, Redis, Jupyter)
 - [x] Ingestão automatizada do Kaggle para a Landing Zone, particionada por data
 - [x] Pipeline Landing → Bronze para as 9 entidades do dataset Olist
-- [x] Pipeline Bronze → Silver para a entidade `customers`
+- [x] Pipeline Bronze → Silver para as 9 entidades, com regras de tratamento específicas por tabela
+- [x] DAGs e scripts genéricos: 1 DAG por camada gera as tasks dinamicamente a partir de um registro central de configuração (adicionar tabela nova = 1 linha de config, não um arquivo novo)
 - [x] Boas práticas de segredo: `.env` e credenciais fora do versionamento, com `.env.example` de referência
+- [x] Sem credenciais hardcoded em código: criação da `SparkSession` centralizada em `utils/spark_utils.py`, lida via variáveis de ambiente, usada tanto pelos jobs do Airflow quanto pelo notebook; conexões `spark_default`/`minio_default` definidas via `AIRFLOW_CONN_*` no `.env`
 
 ### 🚧 Em andamento
 
-- [ ] Pipeline Bronze → Silver para as demais entidades (pedidos, itens, pagamentos, avaliações, produtos, vendedores, geolocalização, categorias)
 - [ ] Camada Gold com modelagem dimensional (fato de pedidos + dimensões de cliente, produto, vendedor, tempo)
 - [ ] DAG mestre orquestrando as camadas com dependências e agendamento reais (hoje cada DAG é disparada manualmente e isoladamente)
 - [ ] Testes de qualidade de dados (schema, nulos, duplicidade) integrados ao pipeline
@@ -212,7 +215,7 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 ## Decisões técnicas
 
 - **Por que MinIO e não acessar S3 diretamente?** MinIO reproduz a API do S3 localmente, permitindo desenvolver e testar toda a integração `s3a://` do Spark sem depender de uma conta cloud — o mesmo código de leitura/escrita funcionaria apontando para um bucket S3 real.
-- **Por que Airflow separando DAGs por entidade em vez de uma DAG única?** Isolamento de falhas: se a ingestão de uma entidade falhar (ex: schema mudou), as demais continuam processando normalmente. O custo é a ausência (ainda) de uma orquestração consolidada entre camadas, endereçada no roadmap.
+- **Por que uma DAG genérica por camada, com uma task por tabela?** O isolamento de falhas fica no nível da task (se `reviews` falhar, as outras 8 tabelas seguem processando), mas sem duplicar código: as tasks são geradas em loop a partir de um registro central de configuração, e a lógica específica de cada tabela vive em um dicionário de funções de transformação (`silver_rules.py`). Adicionar uma tabela nova é uma linha de config + uma função de regra — não um novo par DAG/script copiado.
 - **Por que Spark em cluster standalone (Master/Worker) em vez de modo local?** Para reproduzir o comportamento de submissão de jobs (`SparkSubmitOperator`) e paralelismo real entre driver e workers, mais próximo de um ambiente produtivo do que `local[*]`.
 - **Por que Parquet em todas as camadas intermediárias?** Formato colunar, comprimido e com schema embutido — leitura mais eficiente que CSV para os jobs Spark subsequentes, e padrão de mercado para data lakes.
 - **Por que Dremio na camada de consumo?** Permite consultar os dados do Lakehouse via SQL sem duplicar dados em um data warehouse, e federar múltiplas fontes no futuro.

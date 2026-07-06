@@ -12,8 +12,9 @@ x-airflow-common:
     - "host.docker.internal:host-gateway"
   volumes:
     - ${PROJECT_ROOT}/pipelines:/opt/pipelines
-    - ${PROJECT_ROOT}/volumes/airflow/logs:/opt/airflow/logs 
-    - ${PROJECT_ROOT}/volumes/airflow/plugins:/opt/airflow/plugins  
+    - ${PROJECT_ROOT}/utils:/opt/pipelines/utils
+    - ${PROJECT_ROOT}/volumes/airflow/logs:/opt/airflow/logs
+    - ${PROJECT_ROOT}/volumes/airflow/plugins:/opt/airflow/plugins
     - ${PROJECT_ROOT}/secrets/kaggle.json:/home/airflow/.config/kaggle/kaggle.json
   environment:
     &airflow-common-env    
@@ -177,6 +178,7 @@ services:
       - airflow-network
     volumes:
       - ${PROJECT_ROOT}/notebooks:/home/jovyan/work
+      - ${PROJECT_ROOT}/utils:/home/jovyan/work/utils
     environment:
       - JUPYTER_TOKEN=${JUPYTER_TOKEN}
       - JUPYTER_ENABLE_LAB=yes
@@ -187,6 +189,8 @@ services:
       - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
       - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_ENDPOINT=http://minio:9000
+      # Permite importar utils/spark_utils.py de qualquer notebook, independente da subpasta
+      - PYTHONPATH=/home/jovyan/work
 
 networks:
   airflow-network:
