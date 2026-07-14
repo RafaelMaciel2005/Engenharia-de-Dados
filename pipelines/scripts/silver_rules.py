@@ -1,13 +1,21 @@
 # Regras de transformação Bronze -> Silver: uma função por tabela.
 # Cada função recebe o DataFrame lido da Bronze e devolve o DataFrame tratado.
-# O script bronze_to_silver.py busca a função certa no dicionário TRANSFORMACOES (no final do arquivo).
+# O script bronze_to_silver.py busca a função certa no dicionário TRANSFORMACOES
+# (no final do arquivo) — para adicionar uma tabela nova, basta escrever a função
+# e registrar aqui.
 #
-# Padrão de tratamento adotado:
-#   - ids e códigos: trim (remove espaços acidentais)
-#   - textos de categoria/cidade: lower + trim (padroniza para comparações e joins)
-#   - estados (UF): upper + trim
-#   - datas: to_timestamp (na Bronze tudo chega como string)
-#   - números: cast para int/double conforme o significado da coluna
+# Padrão de tratamento adotado (o porquê de cada um):
+#   - ids e códigos: trim — espaço acidental em id quebra join silenciosamente
+#     ("abc " != "abc") e é invisível a olho nu no dado
+#   - textos de categoria/cidade: lower + trim — "São Paulo", "sao paulo" e
+#     "SAO PAULO " precisam agrupar juntos; padronizar aqui evita joins e
+#     group by errados em TODAS as camadas seguintes
+#   - estados (UF): upper + trim — convenção brasileira é UF maiúscula (SP, RJ)
+#   - datas: to_timestamp — na Bronze tudo chega como string; converter aqui é o
+#     que permite fazer datediff/agregações por período na Gold
+#   - números: cast para int/double — mesma razão; string "10.5" não soma
+#   - CEPs (zip_code_prefix): ficam como STRING de propósito — têm zeros à
+#     esquerda ("01234") que um cast para int destruiria
 from pyspark.sql.functions import col, trim, lower, upper, to_timestamp
 
 
@@ -21,6 +29,9 @@ def tratar_customers(df):
 
 
 def tratar_orders(df):
+    # As 5 colunas de data do pedido viram timestamp de verdade. As de entrega
+    # podem ser nulas (pedido ainda não entregue) — o to_timestamp preserva o
+    # nulo, e é responsabilidade da Gold decidir como tratar isso nas métricas.
     return df \
         .withColumn("order_id", trim(col("order_id"))) \
         .withColumn("customer_id", trim(col("customer_id"))) \
@@ -33,6 +44,9 @@ def tratar_orders(df):
 
 
 def tratar_items(df):
+    # price e freight_value são as colunas de dinheiro que alimentam o cálculo
+    # de receita na Gold — se o cast falhar (formato inesperado), viram nulo,
+    # e o check de range da validação pega.
     return df \
         .withColumn("order_id", trim(col("order_id"))) \
         .withColumn("order_item_id", col("order_item_id").cast("int")) \
@@ -53,6 +67,9 @@ def tratar_payments(df):
 
 
 def tratar_reviews(df):
+    # O problema do texto multilinha dos comentários já foi resolvido na LEITURA
+    # da Bronze (opcoes_csv em config/tabelas_olist.py) — aqui o dado já chega
+    # íntegro e o trabalho é só de tipagem.
     return df \
         .withColumn("review_id", trim(col("review_id"))) \
         .withColumn("order_id", trim(col("order_id"))) \
@@ -64,7 +81,11 @@ def tratar_reviews(df):
 
 
 def tratar_products(df):
-    # Atenção: "lenght" é um erro de escrita do próprio dataset Olist, mantido de propósito
+    # Atenção: "lenght" é um erro de escrita do PRÓPRIO dataset Olist. Mantemos
+    # o nome original de propósito — renomear aqui quebraria a rastreabilidade
+    # com a documentação oficial do dataset no Kaggle.
+    # A categoria é normalizada (lower/trim) porque é a chave do join com a
+    # tabela de tradução (category_name) lá na dim_produto da Gold.
     return df \
         .withColumn("product_id", trim(col("product_id"))) \
         .withColumn("product_category_name", lower(trim(col("product_category_name")))) \
@@ -86,8 +107,10 @@ def tratar_sellers(df):
 
 
 def tratar_geolocation(df):
-    # O arquivo original tem ~1 milhão de linhas com muita repetição exata,
-    # por isso o dropDuplicates no final
+    # O arquivo original tem ~1 milhão de linhas com muita repetição EXATA
+    # (mesmo CEP, mesma lat/lng, mesma cidade). O dropDuplicates no final corta
+    # essa redundância — medido no sandbox, a redução é grande e não perde
+    # nenhuma informação (só cópias idênticas).
     return df \
         .withColumn("geolocation_zip_code_prefix", trim(col("geolocation_zip_code_prefix"))) \
         .withColumn("geolocation_lat", col("geolocation_lat").cast("double")) \
@@ -98,12 +121,16 @@ def tratar_geolocation(df):
 
 
 def tratar_category_name(df):
+    # Tabela de tradução PT -> EN das categorias. As duas colunas são normalizadas
+    # com a MESMA regra usada em products (lower/trim) — é isso que garante que o
+    # join da dim_produto encontra todas as categorias.
     return df \
         .withColumn("product_category_name", lower(trim(col("product_category_name")))) \
         .withColumn("product_category_name_english", lower(trim(col("product_category_name_english"))))
 
 
-# Mapeamento nome da tabela -> função de tratamento
+# Mapeamento nome da tabela -> função de tratamento.
+# O script bronze_to_silver.py valida que a tabela pedida existe aqui antes de rodar.
 TRANSFORMACOES = {
     "customers": tratar_customers,
     "orders": tratar_orders,
