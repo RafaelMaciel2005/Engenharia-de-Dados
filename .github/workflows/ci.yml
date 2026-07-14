@@ -1,0 +1,78 @@
+# CI do pipeline: roda a cada push nas branches de trabalho e em todo PR para a main.
+#
+# Tres verificacoes independentes (se uma falhar, as outras ainda reportam):
+#   1. lint          -> ruff (erros de sintaxe, imports quebrados, variaveis nao usadas)
+#   2. testes        -> pytest com Spark local (regras Silver/Gold, checks de validacao,
+#                       consistencia dos registros de configuracao)
+#   3. validar-dags  -> DagBag do Airflow importa as DAGs de verdade; pega o erro
+#                       classico de "DAG quebrada" antes de chegar no scheduler
+name: CI
+
+on:
+  push:
+    branches: [main, rafa-dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instalar ruff
+        run: pip install ruff==0.8.4
+      - name: Rodar lint
+        run: ruff check .
+
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # PySpark precisa de JVM mesmo em modo local
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Instalar dependencias de teste
+        run: pip install -r requirements-dev.txt
+      - name: Rodar testes unitarios
+        run: pytest
+
+  validar-dags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Instalar Airflow (mesma versao do projeto, com constraints oficiais)
+        run: |
+          pip install "apache-airflow[amazon,apache-spark]==2.11.0" kaggle \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.11.0/constraints-3.11.txt"
+      - name: Importar DAGs via DagBag
+        env:
+          # Mesmo PYTHONPATH que o container do Airflow usa (config/ e scripts/
+          # sao resolvidos a partir de pipelines/)
+          PYTHONPATH: ${{ github.workspace }}/pipelines
+          AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+        run: |
+          python - <<'EOF'
+          from airflow.models import DagBag
+
+          db = DagBag(dag_folder="pipelines/dags", include_examples=False)
+          assert not db.import_errors, f"Erros de import nas DAGs: {db.import_errors}"
+
+          esperadas = {"kaggle_to_landing_zone", "landing_to_bronze", "bronze_to_silver", "silver_to_gold"}
+          faltando = esperadas - set(db.dag_ids)
+          assert not faltando, f"DAGs esperadas que nao foram carregadas: {faltando}"
+
+          print("DAGs carregadas com sucesso:", sorted(db.dag_ids))
+          EOF

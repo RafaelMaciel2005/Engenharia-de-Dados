@@ -10,6 +10,7 @@ Esta pasta reúne a documentação técnica do lakehouse Olist — não *o que* 
 | [Desafios Técnicos](desafios-tecnicos.md) | Problemas reais enfrentados durante o desenvolvimento e como foram diagnosticados e resolvidos. |
 | [Modelo Dimensional (camada Gold)](modelo-dimensional.md) | Documentação do star schema: grão de cada fato, dimensões, perguntas de negócio respondidas e queries de exemplo com resultados reais. |
 | [Validação de Dados](validacao-de-dados.md) | O framework de qualidade do pipeline: tipos de check, falha bloqueante, checksum e o manifest de auditoria por tabela. |
+| [CI/CD](ci-cd.md) | As esteiras do GitHub Actions: o que o CI verifica (lint, testes com Spark local, DagBag), o que o CD publica (imagens no GHCR) e como rodar tudo localmente. |
 
 ## Para quem lê este projeto
 

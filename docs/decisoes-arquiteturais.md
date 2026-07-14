@@ -136,3 +136,21 @@ Análises cruzadas (ex: "atraso derruba a nota?") são feitas com um join entre 
 - *Contra task separada pós-escrita:* validar depois de escrever deixa uma janela em que a camada contém dado ruim (e outro consumidor pode ler nesse meio tempo). Validar antes da escrita elimina a janela; o custo é o `.cache()` do DataFrame, já que ele é percorrido mais de uma vez (contagem, checksum, checks e escrita).
 
 Detalhes de uso e formato do manifest em [Validação de Dados](validacao-de-dados.md).
+
+---
+
+## ADR-12 — CI com Spark local; CD como publicação de imagens versionadas
+
+**Contexto:** o projeto precisava de CI/CD, mas roda inteiramente em `docker-compose` local — não há ambiente de produção para "deployar", e o CI não tem acesso ao cluster Spark nem ao MinIO.
+
+**Decisão em duas partes:**
+
+1. **CI testa sem infraestrutura**: os testes unitários usam `SparkSession local[1]` com DataFrames criados em memória — nada de MinIO, cluster ou credenciais. Cobrem as regras de transformação (Silver/Gold), o framework de validação e a consistência dos registros de configuração. Um terceiro job importa as DAGs via `DagBag` do Airflow real (mesma versão do projeto, com constraints oficiais), pegando "DAG quebrada" antes do merge.
+2. **CD publica imagens, não faz deploy**: quando algo muda em `infrastructure/docker/**` na `main`, as imagens customizadas (Airflow e Spark) são construídas e publicadas no GHCR com a tag do commit. O artefato entregável de um pipeline containerizado é a imagem versionada — é o que um deploy futuro em Kubernetes consumiria.
+
+**Trade-offs:**
+- Testes com Spark local não exercitam o comportamento distribuído (shuffle entre executors, serialização entre processos). Aceitável: a lógica de negócio (transformações e checks) é idêntica nos dois modos, e o comportamento distribuído é validado nas execuções reais via Airflow.
+- Não há teste de integração end-to-end no CI (subir compose no runner seria lento e frágil). O gap é coberto pela validação manual documentada + os checks de qualidade que rodam dentro do próprio pipeline em runtime.
+- Bônus não óbvio: o modo `local[1]` também contorna o mismatch de versão Python entre driver e worker do cluster (desafio nº 9) — driver e executor compartilham o mesmo interpretador.
+
+Detalhes operacionais em [CI/CD](ci-cd.md).
