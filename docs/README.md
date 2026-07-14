@@ -9,6 +9,7 @@ Esta pasta reúne a documentação técnica do lakehouse Olist — não *o que* 
 | [Decisões Arquiteturais](decisoes-arquiteturais.md) | Registro das principais escolhas de arquitetura (formato ADR): contexto, decisão e trade-offs de cada uma. |
 | [Desafios Técnicos](desafios-tecnicos.md) | Problemas reais enfrentados durante o desenvolvimento e como foram diagnosticados e resolvidos. |
 | [Modelo Dimensional (camada Gold)](modelo-dimensional.md) | Documentação do star schema: grão de cada fato, dimensões, perguntas de negócio respondidas e queries de exemplo com resultados reais. |
+| [Validação de Dados](validacao-de-dados.md) | O framework de qualidade do pipeline: tipos de check, falha bloqueante, checksum e o manifest de auditoria por tabela. |
 
 ## Para quem lê este projeto
 

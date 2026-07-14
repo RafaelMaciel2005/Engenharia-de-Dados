@@ -118,3 +118,21 @@ Análises cruzadas (ex: "atraso derruba a nota?") são feitas com um join entre 
 **Decisão:** mantê-las como **string**.
 
 **Trade-offs:** ocupam um pouco mais de espaço que um int. Mas CEPs brasileiros podem ter **zeros à esquerda** (ex: `01234`) — um cast para inteiro os transformaria em `1234`, corrompendo o dado silenciosamente e quebrando joins geográficos. É um exemplo de decisão guiada pelo significado do dado, não pela aparência.
+
+---
+
+## ADR-11 — Validação de dados embutida nos jobs, com falha bloqueante
+
+**Contexto:** o pipeline precisava de checks de qualidade de dados (nulos, duplicatas, integridade referencial, fan-out). Havia três formas de fazer: adotar uma ferramenta pronta (Great Expectations), criar tasks de validação separadas no Airflow rodando *depois* da escrita, ou embutir a validação dentro do próprio job, *antes* da escrita.
+
+**Decisão:** framework leve próprio, **embutido nos jobs e rodando antes da escrita**:
+- Checks reutilizáveis em `utils/validation_checks.py`, declarados por tabela em um registro central (`config/validacoes.py`) — mesmo padrão config + regras usado no restante do pipeline.
+- **Falha bloqueia**: qualquer check reprovado levanta exceção, o job morre, a task fica vermelha no Airflow e **o dado inválido nunca é gravado na camada**.
+- Cada execução grava um **manifest.json** de auditoria (linhas, schema, checksum do conteúdo, resultado dos checks) no bucket `logs`, espelhando o caminho do dado.
+- O **checksum** usa `xxhash64` nativo do Spark somado por linha — determinístico, independente da ordem das linhas e executado 100% na JVM (sem UDF Python, de propósito — ver desafio nº 9).
+
+**Trade-offs:**
+- *Contra ferramenta pronta:* Great Expectations é o equivalente de mercado e traria relatórios ricos, mas é uma dependência pesada para 7 tipos de check — e o framework próprio mantém o projeto inteiro legível de ponta a ponta (valor importante num portfólio).
+- *Contra task separada pós-escrita:* validar depois de escrever deixa uma janela em que a camada contém dado ruim (e outro consumidor pode ler nesse meio tempo). Validar antes da escrita elimina a janela; o custo é o `.cache()` do DataFrame, já que ele é percorrido mais de uma vez (contagem, checksum, checks e escrita).
+
+Detalhes de uso e formato do manifest em [Validação de Dados](validacao-de-dados.md).
