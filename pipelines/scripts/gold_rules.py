@@ -78,6 +78,8 @@ def build_dim_tempo(dfs):
     # Grão: 1 linha por data de compra distinta.
     # Derivamos o calendário a partir das datas reais de pedido (order_purchase_timestamp),
     # que é a chave de tempo usada pela fato de pedidos.
+    # O dropna é defensivo: order_purchase_timestamp não deveria ter nulo, mas se
+    # tiver, uma linha "data=null" na dimensão quebraria o check de unicidade.
     return dfs["orders"] \
         .select(F.to_date("order_purchase_timestamp").alias("data")) \
         .dropna() \

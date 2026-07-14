@@ -115,3 +115,21 @@ MSYS_NO_PATHCONV=1 docker exec <container> spark-submit ... /opt/pipelines/scrip
 **Sintoma:** arquivos `_SUCCESS/xl.meta` (metadados internos gerados pelo MinIO/Spark) apareceram rastreados no Git.
 
 **Solução aplicada:** removê-los do índice do Git (`git rm --cached`, mantendo-os em disco) e reforçar o `.gitignore` para ignorar todo o conteúdo de dados de `lakehouse/`, preservando apenas os `.gitkeep` que marcam a estrutura de pastas. Dado de data lake não pertence ao versionamento de código.
+
+---
+
+## 9. Mismatch de versão Python entre driver e worker do Spark
+
+**Sintoma:** durante o teste negativo do framework de validação, um script que criava um DataFrame sintético com `spark.createDataFrame([...])` falhou com:
+```
+PySparkRuntimeError: [PYTHON_VERSION_MISMATCH] Python in worker has different
+version (3, 10) than that in driver 3.11
+```
+
+**Diagnóstico:** o driver dos jobs roda no container do Airflow (imagem com Python **3.11**), mas os executors rodam no container do spark-worker (imagem com Python **3.10**). O PySpark exige a mesma versão *minor* nas duas pontas — mas só quando algum trabalho precisa executar **Python nos workers**. Operações puras da DataFrame API (filter, join, cast, agregações) são compiladas para a JVM e nunca tocam o Python do worker — por isso o pipeline inteiro sempre funcionou normalmente. O problema estava latente e só apareceu quando `createDataFrame` a partir de uma lista Python local precisou serializar dados via processo Python no executor.
+
+**Mitigação aplicada:** o framework de validação foi mantido 100% em funções nativas da DataFrame API (inclusive o checksum, que usa `xxhash64` nativo em vez de UDF Python justamente por isso), e o teste sintético passou a gerar dados via CSV + `spark.read` (mesmo caminho do código de produção). O risco continua documentado: qualquer código futuro que use UDFs Python, `toPandas()` ou `createDataFrame` local vai esbarrar nele.
+
+**Correção definitiva (pendente):** alinhar a versão do Python entre a imagem do Airflow e a do Spark (instalar 3.11 na imagem do worker ou fixar `PYSPARK_PYTHON` para um 3.11 disponível em ambas).
+
+**Lição:** um cluster pode estar "funcionando" e ainda assim ter incompatibilidades latentes que só certos caminhos de código exercitam. Testes negativos não validam só as regras — expõem a infraestrutura.

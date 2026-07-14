@@ -84,6 +84,8 @@ flowchart LR
 5. **Consumo** — a camada analítica é exposta via **Dremio**, que atua como motor de consulta SQL sobre o data lake, permitindo consumo direto por ferramentas de BI.
 6. **Jupyter** é usado como ambiente de sandbox para prototipar as transformações Spark antes de promovê-las para scripts de produção.
 
+Em todas as camadas, cada tabela passa por **checks de qualidade antes da escrita** (nulos em chave, unicidade do grão, integridade referencial, detecção de fan-out) — se algum check falha, o job é bloqueado e o dado inválido não entra no lakehouse. Cada execução também grava um **manifest de auditoria** (linhas, schema, checksum) no bucket `logs`. Detalhes em [`docs/validacao-de-dados.md`](docs/validacao-de-dados.md).
+
 ---
 
 ## Stack utilizada
@@ -92,7 +94,7 @@ flowchart LR
 |---|---|---|
 | Orquestração | **Apache Airflow 2.11** (LocalExecutor) | Agendamento e dependência entre as etapas do pipeline |
 | Processamento | **Apache Spark 3.5.1** (cluster standalone Master/Worker) | Transformação distribuída dos dados entre camadas |
-| Armazenamento | **MinIO** (S3-compatible) | Data Lake local, organizado em buckets `landing-zone`, `bronze`, `silver`, `gold` |
+| Armazenamento | **MinIO** (S3-compatible) | Data Lake local, organizado em buckets `landing-zone`, `bronze`, `silver`, `gold` e `logs` (manifests de validação) |
 | Query Engine | **Dremio 26** | Virtualização e consulta SQL federada sobre o Lakehouse |
 | Metastore | **PostgreSQL 15** | Backend de metadados do Airflow |
 | Fila de tarefas | **Redis** | Broker de mensagens do Airflow (Celery-ready) |
@@ -122,16 +124,16 @@ Os dados brutos **não são versionados neste repositório** (ver `.gitignore`);
 │   │   └── docker-compose.yaml
 │   └── kubernetes/            # Reservado para manifests de deploy em K8s (futuro)
 ├── pipelines/
-│   ├── config/               # Registros centrais: tabelas (tabelas_olist.py) e objetos Gold (gold_objects.py)
+│   ├── config/               # Registros centrais: tabelas, objetos Gold e checks de validação
 │   ├── dags/                 # DAGs genéricas: geram 1 task por tabela/objeto a partir da config
 │   └── scripts/              # Jobs PySpark genéricos + regras de transformação (silver_rules.py, gold_rules.py)
 ├── notebooks/
 │   ├── bronze/               # Sandbox de prototipagem (Landing → Bronze)
 │   ├── silver/               # Sandbox de prototipagem por tabela (Bronze → Silver)
 │   └── gold/                 # Sandbox de modelagem (Silver → Gold)
-├── docs/                     # Documentação técnica (decisões, desafios, modelo dimensional)
-├── lakehouse/                # Bind mount local do MinIO (landing-zone / bronze / silver / gold)
-├── utils/                    # Funções utilitárias compartilhadas entre jobs Spark
+├── docs/                     # Documentação técnica (decisões, desafios, modelo dimensional, validação)
+├── lakehouse/                # Bind mount local do MinIO (landing-zone / bronze / silver / gold / logs)
+├── utils/                    # SparkSession compartilhada + framework de validação (checks, checksum, manifest)
 └── secrets/                  # Credenciais locais não versionadas (ex: kaggle.json)
 ```
 
@@ -197,6 +199,7 @@ Além deste README, a pasta [`docs/`](docs/) reúne a documentação técnica ap
 | [Decisões Arquiteturais](docs/decisoes-arquiteturais.md) | Registro (formato ADR) das principais escolhas: arquitetura Medalhão, DAGs genéricas, fatos separados, MinIO/Dremio/Parquet, credenciais, etc. — com contexto e trade-offs de cada uma. |
 | [Desafios Técnicos](docs/desafios-tecnicos.md) | Problemas reais e como foram resolvidos: corrupção do Postgres em bind mount no Windows, CSV multilinha do `reviews`, fan-out entre itens e pagamentos, a pegadinha do `customer_unique_id`, e outros. |
 | [Modelo Dimensional](docs/modelo-dimensional.md) | Documentação do star schema da camada Gold: grão de cada fato, dimensões, linhagem e queries de negócio com **resultados reais** (receita por estado, impacto do atraso na avaliação). |
+| [Validação de Dados](docs/validacao-de-dados.md) | O framework de qualidade do pipeline: tipos de check, falha bloqueante antes da escrita, checksum de conteúdo e o manifest de auditoria por tabela. |
 
 ---
 
@@ -214,11 +217,12 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 - [x] Camada Gold com modelagem dimensional (star schema): 4 dimensões (`dim_cliente`, `dim_produto`, `dim_vendedor`, `dim_tempo`) e 3 fatos de grãos separados (`fato_pedidos_itens`, `fato_pagamentos`, `fato_avaliacoes`) para evitar fan-out entre itens e pagamentos
 - [x] Boas práticas de segredo: `.env` e credenciais fora do versionamento, com `.env.example` de referência
 - [x] Sem credenciais hardcoded em código: criação da `SparkSession` centralizada em `utils/spark_utils.py`, lida via variáveis de ambiente, usada tanto pelos jobs do Airflow quanto pelo notebook; conexões `spark_default`/`minio_default` definidas via `AIRFLOW_CONN_*` no `.env`
+- [x] Validação de qualidade de dados integrada às 3 camadas, com falha bloqueante antes da escrita: checks declarativos por tabela (nulos, unicidade, domínio, range, integridade referencial, fan-out), checksum de conteúdo e manifest de auditoria por execução no bucket `logs`
 
 ### 🚧 Em andamento
 
 - [ ] DAG mestre orquestrando as camadas com dependências e agendamento reais (hoje cada DAG é disparada manualmente e isoladamente)
-- [ ] Testes de qualidade de dados (schema, nulos, duplicidade) integrados ao pipeline
+- [ ] Alinhar a versão do Python entre driver (Airflow, 3.11) e workers do Spark (3.10) — incompatibilidade latente documentada em `docs/desafios-tecnicos.md`
 
 ### 📋 Planejado
 

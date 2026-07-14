@@ -52,6 +52,11 @@ lakehouse/**
 **/logs/
 **/*.log
 
+# EXCEÇÃO: lakehouse/logs/ é o bucket de manifests de validação (dado do lakehouse,
+# nao log de container) -- precisa reabrir a regra acima especificamente para ele
+!lakehouse/logs/
+!lakehouse/logs/.gitkeep
+
 # ==========================================
 # 4. PYTHON (AIRFLOW & SPARK)
 # ==========================================

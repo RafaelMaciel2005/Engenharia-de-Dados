@@ -11,20 +11,23 @@ default_args = {
 with DAG(
     dag_id="silver_to_gold",
     default_args=default_args,
-    schedule_interval=None,
-    catchup=False,
+    schedule_interval=None,  # sem agendamento: disparo manual pela UI (DAG mestre esta no roadmap)
+    catchup=False,           # nao tenta "recuperar" execucoes passadas desde o start_date
     tags=["lakehouse", "medallion", "gold"],
 ) as dag:
 
-    # Gera uma task por objeto Gold (dimensões e fatos) a partir do registro central
-    # (config/gold_objects.py). O script genérico constrói cada objeto aplicando a
-    # regra específica definida em scripts/gold_rules.py.
+    # Gera uma task por objeto Gold (4 dimensoes + 3 fatos) a partir do registro
+    # central (config/gold_objects.py). As tasks rodam em paralelo de proposito:
+    # os fatos usam chave natural (nao surrogate key), entao nenhum objeto depende
+    # de outro objeto da propria Gold — todos leem apenas da Silver.
     for objeto in GOLD_OBJECTS:
         SparkSubmitOperator(
             task_id=f"gold_{objeto['nome']}",
+            # Conexao com o cluster, definida via AIRFLOW_CONN_SPARK_DEFAULT no .env
             conn_id="spark_default",
+            # Caminho DENTRO do container (pipelines/ montada em /opt/pipelines)
             application="/opt/pipelines/scripts/silver_to_gold.py",
             application_args=[objeto["nome"]],
             name=f"job-silver-to-gold-{objeto['nome']}",
-            verbose=True,
+            verbose=True,  # log completo do spark-submit no log da task
         )
