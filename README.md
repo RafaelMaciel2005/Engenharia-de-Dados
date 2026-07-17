@@ -192,6 +192,19 @@ No Airflow, dispare as DAGs manualmente na seguinte ordem (ainda não há uma DA
 3. `bronze_to_silver` (idem, aplicando as regras de tratamento de cada tabela)
 4. `silver_to_gold` (gera 1 task por dimensão/fato do modelo dimensional)
 
+### Rodando os testes localmente
+
+Os testes não precisam do ambiente Docker no ar — usam Spark em modo local com dados em memória (apenas Java 17 disponível no PATH):
+
+```bash
+pip install -r requirements-dev.txt
+
+ruff check .   # lint
+pytest         # testes unitários (regras, checks de validação e consistência das configs)
+```
+
+O CI executa exatamente esses comandos (mais a validação de importação das DAGs) a cada push e pull request — ver [`docs/ci-cd.md`](docs/ci-cd.md).
+
 ---
 
 ## Documentação
