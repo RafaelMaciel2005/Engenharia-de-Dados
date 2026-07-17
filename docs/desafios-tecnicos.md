@@ -133,3 +133,17 @@ version (3, 10) than that in driver 3.11
 **Correção definitiva (pendente):** alinhar a versão do Python entre a imagem do Airflow e a do Spark (instalar 3.11 na imagem do worker ou fixar `PYSPARK_PYTHON` para um 3.11 disponível em ambas).
 
 **Lição:** um cluster pode estar "funcionando" e ainda assim ter incompatibilidades latentes que só certos caminhos de código exercitam. Testes negativos não validam só as regras — expõem a infraestrutura.
+
+---
+
+## 10. Import com efeito colateral derrubando o parse das DAGs no CI
+
+**Sintoma:** a primeira execução do CI falhou no job `validar-dags`, com o processo morrendo no meio do `DagBag` e uma mensagem inesperada no log: `Authentication required to call the Kaggle API`.
+
+**Diagnóstico:** o script `kaggle_to_landing.py` importava a biblioteca do Kaggle no **topo do módulo**. Essa biblioteca tem efeito colateral no import: procura a credencial e **encerra o processo** se não encontrar. A cadeia do problema: o DagBag importa a DAG → a DAG importa `scripts.kaggle_to_landing` → o módulo importa `kaggle` → sem `kaggle.json` no runner, o processo inteiro morre. No ambiente local o problema nunca apareceu porque o `kaggle.json` está sempre montado no container — mais um caso de defeito latente que só outro ambiente revela.
+
+**Solução aplicada:** mover o import para **dentro da função da task** (`extrair_do_kaggle`). Assim ele só executa quando a task roda (onde a credencial é obrigatória de qualquer forma), e o parse da DAG fica leve e sem dependências externas — que é a recomendação oficial do Airflow para imports pesados, independentemente do CI.
+
+**Validação:** a condição do runner foi reproduzida localmente apontando `KAGGLE_CONFIG_DIR` para uma pasta vazia dentro do container — antes da correção o parse morria; depois, `airflow dags list-import-errors` retorna limpo.
+
+**Lição:** o parse de DAG roda em muitos contextos além do scheduler (CI, IDE, `airflow dags list`) — código de nível de módulo em arquivo de DAG precisa ser inofensivo. E o job de validação de DAGs no CI provou o próprio valor na primeira execução: pegou um problema real que o ambiente local jamais mostraria.

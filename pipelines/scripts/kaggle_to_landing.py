@@ -8,7 +8,6 @@ from datetime import datetime
 import os
 import glob
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from kaggle.api.kaggle_api_extended import KaggleApi
 
 # Configuracoes fixas centralizadas (sem chaves expostas — a credencial do Kaggle
 # vem do kaggle.json montado pelo Docker, e a do MinIO da conexao do Airflow)
@@ -19,6 +18,14 @@ TMP_DIR = "/opt/airflow/tmp_kaggle"
 
 def extrair_do_kaggle():
     print("Iniciando a autenticação nativa com o Kaggle via arquivo kaggle.json...")
+
+    # Import DENTRO da funcao de proposito: a biblioteca do Kaggle exige
+    # credencial ja no import e derruba o processo se nao encontrar. No topo do
+    # modulo, isso quebraria o PARSE da DAG em qualquer ambiente sem kaggle.json
+    # (foi exatamente o que derrubou o job de validacao de DAGs no CI).
+    # Dentro da funcao, so roda quando a task executa — que e a boa pratica do
+    # Airflow para imports pesados de qualquer forma.
+    from kaggle.api.kaggle_api_extended import KaggleApi
 
     # A biblioteca KaggleApi le automaticamente o kaggle.json que o docker-compose
     # monta em /home/airflow/.config/kaggle/ — nenhuma chave passa pelo codigo
