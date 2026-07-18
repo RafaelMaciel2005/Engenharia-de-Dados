@@ -26,7 +26,19 @@ Roda a cada push nas branches de trabalho (`main`, `rafa-dev`) e em todo PR para
 Os testes usam `SparkSession` em `local[1]` — driver e executor no mesmo processo. Isso tem dois efeitos deliberados:
 
 1. **Nenhuma dependência de infraestrutura**: os testes não precisam de MinIO, cluster nem credenciais — rodam em qualquer runner do GitHub com Java 17 + `pyspark` instalado (fixado na mesma versão do cluster, 3.5.1).
-2. **Imunidade ao mismatch de Python**: como driver e executor compartilham o mesmo interpretador, o problema de versão Python driver/worker do cluster (ver [Desafios Técnicos → nº 9](desafios-tecnicos.md)) não afeta os testes — e é por isso que aqui pode-se usar `createDataFrame` livremente.
+2. **Imunidade ao mismatch de Python**: como driver e executor compartilham o mesmo interpretador, o problema de versão Python driver/worker que existia no cluster (ver [Desafios Técnicos → nº 9](desafios-tecnicos.md), desde então **resolvido** alinhando as imagens em Python 3.11) nunca afetou os testes — e é por isso que aqui pode-se usar `createDataFrame` livremente.
+
+---
+
+## Branch protection na `main`
+
+Os checks do CI não ficam só "informativos": a branch `main` está protegida exigindo que os três jobs (`lint`, `testes`, `validar-dags`) passem **verdes antes de qualquer merge**, além de:
+
+- **PR obrigatório** — nada entra na `main` por push direto; tudo passa por Pull Request.
+- **Branch atualizada** (`strict`) — o PR precisa estar em dia com a `main` antes do merge, garantindo que os checks rodaram sobre o código realmente mesclado.
+- **`force-push` e deleção bloqueados** na `main`.
+
+É o elo que fecha o ciclo: o CI *detecta* problemas e a proteção *impede* que código com CI vermelho chegue à branch principal. Configurável em **Settings → Branches** (ou via API REST `branches/main/protection`).
 
 ---
 

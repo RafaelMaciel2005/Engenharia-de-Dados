@@ -243,10 +243,8 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 - [x] Testes automatizados (pytest + Spark local): regras Silver/Gold, checks de validação e consistência entre os registros de configuração
 - [x] CI/CD via GitHub Actions: lint (`ruff`), testes e validação de importação das DAGs (DagBag) a cada push/PR; build e publicação das imagens Docker no GHCR quando a infraestrutura muda na `main`
 - [x] DAG mestre (`pipeline_completo`) orquestrando o fluxo ponta-a-ponta: cada camada só começa quando a anterior termina inteira com sucesso — as DAGs de camada continuam disparáveis isoladamente
-
-### 🚧 Em andamento
-
-- [ ] Alinhar a versão do Python entre driver (Airflow, 3.11) e workers do Spark (3.10) — incompatibilidade latente documentada em `docs/desafios-tecnicos.md`
+- [x] Versão do Python alinhada entre driver (Airflow) e executores do Spark (ambos 3.11): imagem do Spark rebaseada em `python:3.11` com o binário vindo da imagem oficial `apache/spark:3.5.1` — resolve a incompatibilidade latente documentada em `docs/desafios-tecnicos.md` (nº 9)
+- [x] Branch protection na `main`: exige os 3 checks do CI (`lint`, `testes`, `validar-dags`) verdes e fluxo de PR antes do merge
 
 ### 📋 Planejado
 
