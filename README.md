@@ -87,6 +87,8 @@ flowchart LR
 
 Em todas as camadas, cada tabela passa por **checks de qualidade antes da escrita** (nulos em chave, unicidade do grão, integridade referencial, detecção de fan-out) — se algum check falha, o job é bloqueado e o dado inválido não entra no lakehouse. Cada execução também grava um **manifest de auditoria** (linhas, schema, checksum) no bucket `logs`. Detalhes em [`docs/validacao-de-dados.md`](docs/validacao-de-dados.md).
 
+O fluxo ponta-a-ponta é orquestrado por uma **DAG mestre** (`pipeline_completo`): cada camada só inicia quando a anterior termina inteira com sucesso — uma falha de validação em qualquer tabela interrompe a corrente ali, impedindo que camadas seguintes sejam construídas sobre dado inválido.
+
 ---
 
 ## Stack utilizada
@@ -128,7 +130,7 @@ Os dados brutos **não são versionados neste repositório** (ver `.gitignore`);
 │   └── kubernetes/            # Reservado para manifests de deploy em K8s (futuro)
 ├── pipelines/
 │   ├── config/               # Registros centrais: tabelas, objetos Gold e checks de validação
-│   ├── dags/                 # DAGs genéricas: geram 1 task por tabela/objeto a partir da config
+│   ├── dags/                 # DAGs genéricas (1 task por tabela/objeto) + DAG mestre (pipeline_completo)
 │   └── scripts/              # Jobs PySpark genéricos + regras de transformação (silver_rules.py, gold_rules.py)
 ├── notebooks/
 │   ├── bronze/               # Sandbox de prototipagem (Landing → Bronze)
@@ -185,12 +187,14 @@ docker compose up -d --build
 
 ### Executando o pipeline
 
-No Airflow, dispare as DAGs manualmente na seguinte ordem (ainda não há uma DAG "mestre" — ver [Roadmap](#status--roadmap)):
+No Airflow, dispare a DAG mestre **`pipeline_completo`** — ela executa as quatro etapas na ordem certa, e cada camada só começa quando a anterior termina inteira com sucesso:
 
 1. `kaggle_to_landing_zone`
 2. `landing_to_bronze` (gera 1 task por tabela automaticamente)
 3. `bronze_to_silver` (idem, aplicando as regras de tratamento de cada tabela)
 4. `silver_to_gold` (gera 1 task por dimensão/fato do modelo dimensional)
+
+Cada DAG de camada também pode ser disparada isoladamente — útil para reprocessar só uma etapa (ex.: mudou uma regra da Silver, não precisa baixar o dataset de novo).
 
 ### Rodando os testes localmente
 
@@ -238,10 +242,10 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 - [x] Validação de qualidade de dados integrada às 3 camadas, com falha bloqueante antes da escrita: checks declarativos por tabela (nulos, unicidade, domínio, range, integridade referencial, fan-out), checksum de conteúdo e manifest de auditoria por execução no bucket `logs`
 - [x] Testes automatizados (pytest + Spark local): regras Silver/Gold, checks de validação e consistência entre os registros de configuração
 - [x] CI/CD via GitHub Actions: lint (`ruff`), testes e validação de importação das DAGs (DagBag) a cada push/PR; build e publicação das imagens Docker no GHCR quando a infraestrutura muda na `main`
+- [x] DAG mestre (`pipeline_completo`) orquestrando o fluxo ponta-a-ponta: cada camada só começa quando a anterior termina inteira com sucesso — as DAGs de camada continuam disparáveis isoladamente
 
 ### 🚧 Em andamento
 
-- [ ] DAG mestre orquestrando as camadas com dependências e agendamento reais (hoje cada DAG é disparada manualmente e isoladamente)
 - [ ] Alinhar a versão do Python entre driver (Airflow, 3.11) e workers do Spark (3.10) — incompatibilidade latente documentada em `docs/desafios-tecnicos.md`
 
 ### 📋 Planejado
