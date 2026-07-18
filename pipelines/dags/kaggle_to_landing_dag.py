@@ -11,7 +11,7 @@ default_args = {
 with DAG(
     dag_id='kaggle_to_landing_zone',
     default_args=default_args,
-    schedule_interval=None,  # disparo manual: o dataset Olist e historico, nao ha dado novo chegando
+    schedule_interval=None,  # disparo manual ou via DAG mestre: o dataset Olist e historico, nao ha dado novo chegando
     catchup=False,
     tags=['landing', 'kaggle', 'extract']
 ) as dag:

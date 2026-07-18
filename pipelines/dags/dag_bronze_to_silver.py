@@ -11,7 +11,7 @@ default_args = {
 with DAG(
     dag_id="bronze_to_silver",
     default_args=default_args,
-    schedule_interval=None,  # sem agendamento: disparo manual pela UI (DAG mestre esta no roadmap)
+    schedule_interval=None,  # sem agendamento proprio: quem dispara e a DAG mestre (pipeline_completo) ou a UI
     catchup=False,           # nao tenta "recuperar" execucoes passadas desde o start_date
     tags=["lakehouse", "medallion", "silver"],
 ) as dag:
