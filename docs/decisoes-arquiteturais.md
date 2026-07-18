@@ -154,3 +154,17 @@ Detalhes de uso e formato do manifest em [Validação de Dados](validacao-de-dad
 - Bônus não óbvio: o modo `local[1]` também contorna o mismatch de versão Python entre driver e worker do cluster (desafio nº 9) — driver e executor compartilham o mesmo interpretador.
 
 Detalhes operacionais em [CI/CD](ci-cd.md).
+
+---
+
+## ADR-13 — DAG mestre com `TriggerDagRunOperator` (em vez de Datasets ou DAG única)
+
+**Contexto:** as quatro DAGs (extração, Bronze, Silver, Gold) rodavam soltas — a ordem entre camadas dependia de disciplina manual na UI. Era preciso orquestrar o fluxo ponta-a-ponta sem perder a capacidade de rodar uma camada isolada.
+
+**Decisão:** criar uma DAG mestre (`pipeline_completo`) que dispara cada DAG de camada em sequência via **`TriggerDagRunOperator` com `wait_for_completion=True`**: a próxima camada só começa quando a anterior termina **inteira** com sucesso. Se qualquer tabela falhar (inclusive por check de validação), a corrente para ali.
+
+**Alternativas descartadas:**
+- **Airflow Datasets (data-aware scheduling)** — o mecanismo mais moderno, mas espalharia a lógica de orquestração pelos quatro arquivos (cada task precisaria declarar `outlets`, cada DAG consumidora um `schedule` por dataset). Pior: qualquer disparo manual de uma camada dispararia as seguintes automaticamente — indesejado num projeto onde re-rodar só a Silver é um caso de uso frequente.
+- **Uma DAG única com todas as tasks** — daria a dependência mais fina possível (Gold esperando só as Silver de que depende), mas eliminaria as DAGs de camada individuais e concentraria ~30 tasks num grafo só. A granularidade extra não paga o custo: o pipeline inteiro roda em minutos.
+
+**Trade-offs:** o `wait_for_completion` mantém a task do mestre ocupando um slot do executor enquanto vigia a filha (aceitável no LocalExecutor deste projeto; em escala, a alternativa seria o modo deferrable). A dependência é por **camada inteira**, não por tabela — a Silver espera as 9 tabelas da Bronze, mesmo que só precise de uma. Em troca, as DAGs de camada ficam **intocadas e independentes**, e a ordem do pipeline vive num único arquivo legível de ~50 linhas.

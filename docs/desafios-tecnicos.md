@@ -147,3 +147,17 @@ version (3, 10) than that in driver 3.11
 **Validação:** a condição do runner foi reproduzida localmente apontando `KAGGLE_CONFIG_DIR` para uma pasta vazia dentro do container — antes da correção o parse morria; depois, `airflow dags list-import-errors` retorna limpo.
 
 **Lição:** o parse de DAG roda em muitos contextos além do scheduler (CI, IDE, `airflow dags list`) — código de nível de módulo em arquivo de DAG precisa ser inofensivo. E o job de validação de DAGs no CI provou o próprio valor na primeira execução: pegou um problema real que o ambiente local jamais mostraria.
+
+---
+
+## 11. Dataset inteiro duplicado na Bronze — pego pela validação na primeira rodada da DAG mestre
+
+**Sintoma:** na primeira execução ponta-a-ponta via DAG mestre (`pipeline_completo`), a camada Silver falhou em 5 tabelas com mensagens como `[FALHOU] unique:customer_id — 99441 linhas duplicadas na chave`. O número chamou atenção: 99.441 é **exatamente o total de clientes do dataset** — ou seja, cada linha existia duas vezes.
+
+**Diagnóstico:** o script da Bronze lia a Landing com wildcard (`vendas/*/arquivo.csv`), pegando **todas** as partições de `ingestion_date=` de uma vez. Com uma única partição (como foi em todas as execuções anteriores), funcionava. Mas a DAG mestre começa pela extração — que criou uma **segunda** partição com a data do dia — e a Bronze passou a ler o dataset em dobro. Um defeito latente desde o primeiro dia do projeto, invisível até a segunda extração acontecer.
+
+**Solução aplicada:** a Bronze agora descobre a partição mais recente via `list_objects_v2` (boto3, com `Delimiter="/"` para listar só os prefixos de partição) e lê **apenas ela**. A Landing continua acumulando o histórico de extrações — o papel dela é ser arquivo bruto auditável — mas a Bronze representa "o dataset atual". Como `ingestion_date=YYYY-MM-DD` ordena igual alfabética e cronologicamente, um `max()` resolve sem parsear datas.
+
+**Validação:** nova execução completa da DAG mestre após a correção, com todas as camadas verdes e as contagens de volta aos valores conhecidos (99.441 clientes, 112.650 itens).
+
+**Lição:** duas, uma de arquitetura e uma de processo. De arquitetura: **acumular histórico na Landing e consumir tudo na Bronze são decisões incompatíveis** — quem acumula precisa de um consumidor que selecione. De processo: o comportamento fail-hard da validação funcionou exatamente como projetado — a Silver bloqueou, a Gold nem chegou a ser disparada (`upstream_failed`), e **nenhum dado duplicado passou adiante**. O custo de escrever os checks se pagou na primeira oportunidade real.
