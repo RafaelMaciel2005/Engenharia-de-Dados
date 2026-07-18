@@ -4,13 +4,44 @@
 # E "generico" porque um unico script atende as 9 tabelas do dataset: a DAG
 # (dag_landing_to_bronze.py) passa o nome da tabela como argumento, e o resto
 # (arquivo de origem, opcoes de leitura) vem do registro central de configuracao.
+import os
 import sys
+import boto3
 from pyspark.sql.functions import current_timestamp
 from utils.spark_utils import create_spark_session
 from utils.validation_checks import executar_validacoes
 from utils.validation_checksum import calcular_checksum
 from utils.validation_manifest import gravar_manifest
 from config.tabelas_olist import TABELAS_OLIST
+
+def particao_mais_recente():
+    # A Landing guarda UMA particao por rodada de extracao (ingestion_date=...).
+    # A Bronze processa somente a mais recente. A versao anterior lia todas com
+    # wildcard — funcionava com uma particao so, mas na segunda extracao o
+    # dataset inteiro dobrou (99.441 clientes "duplicados"). Quem pegou foi o
+    # check de unicidade da Silver, na primeira rodada da DAG mestre.
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=os.getenv("MINIO_ENDPOINT", "http://minio:9000"),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    )
+
+    # Com Delimiter="/", o S3 devolve as "pastas" de primeiro nivel (CommonPrefixes)
+    # em vez de listar arquivo por arquivo — exatamente as particoes que queremos.
+    resposta = s3.list_objects_v2(
+        Bucket="landing-zone", Prefix="vendas/ingestion_date=", Delimiter="/"
+    )
+    particoes = [p["Prefix"].rstrip("/").split("/")[-1] for p in resposta.get("CommonPrefixes", [])]
+
+    if not particoes:
+        raise RuntimeError(
+            "Nenhuma particao ingestion_date= encontrada na landing-zone — rode a extracao (kaggle_to_landing_zone) primeiro"
+        )
+
+    # ingestion_date=YYYY-MM-DD: ordem alfabetica e ordem cronologica coincidem,
+    # entao max() ja devolve a extracao mais recente sem parsear data nenhuma
+    return max(particoes)
 
 def main(tabela):
     print(f"Iniciando processamento Spark: Landing to Bronze ({tabela})...")
@@ -28,10 +59,12 @@ def main(tabela):
 
     spark = create_spark_session(f"Landing-to-Bronze-{tabela}")
 
-    # O * no caminho le os CSVs de TODAS as particoes de ingestion_date de uma vez.
-    # E isso que permite reprocessar a Bronze quantas vezes for preciso sem nunca
-    # precisar baixar nada do Kaggle de novo (a extracao e uma etapa separada).
-    input_path = f"s3a://landing-zone/vendas/*/{config['arquivo']}"
+    # Le apenas a particao da extracao mais recente. A Landing continua guardando
+    # o historico de todas as extracoes (auditoria + reprocessamento de uma data
+    # especifica, se um dia precisar) — mas a Bronze representa "o dataset atual",
+    # entao misturar particoes aqui duplicaria tudo.
+    particao = particao_mais_recente()
+    input_path = f"s3a://landing-zone/vendas/{particao}/{config['arquivo']}"
     output_path = f"s3a://bronze/olist/{tabela}/"
 
     print(f"Lendo dados brutos de: {input_path}")

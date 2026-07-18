@@ -60,8 +60,8 @@ def carregar_para_minio():
         nome_arquivo = os.path.basename(caminho_local)
 
         # Particiona por data de ingestao (ingestion_date=YYYY-MM-DD). Cada rodada
-        # de extracao cria sua propria particao — e o wildcard dos scripts da
-        # Bronze le todas elas. Assim a Landing guarda o historico das extracoes.
+        # de extracao cria sua propria particao — a Landing guarda o historico
+        # completo, e a Bronze processa apenas a particao mais recente.
         caminho_minio = f"vendas/ingestion_date={data_atual}/{nome_arquivo}"
 
         print(f"Enviando {nome_arquivo} para a Landing Zone...")
