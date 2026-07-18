@@ -78,6 +78,10 @@ env/
 dist/
 build/
 
+# Caches de ferramentas de teste e lint
+.pytest_cache/
+.ruff_cache/
+
 # ==========================================
 # 5. JUPYTER NOTEBOOKS
 # ==========================================

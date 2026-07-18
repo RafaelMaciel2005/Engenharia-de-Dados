@@ -1,0 +1,12 @@
+# Configuracao das ferramentas de qualidade de codigo (lint e testes).
+# O projeto nao e um pacote instalavel — este arquivo existe so para centralizar
+# a config do ruff e do pytest, que rodam tanto localmente quanto no CI.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+[tool.ruff]
+line-length = 120
+# Pastas que nao sao codigo do pipeline: notebooks (sandbox), dados e volumes
+extend-exclude = ["notebooks", "lakehouse", "volumes"]

@@ -141,6 +141,8 @@ Join **cross-fact** de `fato_avaliacoes` com `fato_pedidos_itens` por `order_id`
 
 > Este resultado valida na prática o modelo dimensional: dois fatos de grãos independentes, cruzados por `order_id`, entregam um insight de negócio claro — **atraso e não-entrega derrubam drasticamente a satisfação** (de 4,29 para 2,27 e 1,77). É exatamente o tipo de análise que a separação de fatos (em vez de uma tabela única com fan-out) torna correta e confiável.
 
+As garantias estruturais do modelo são protegidas em duas frentes: **em runtime**, pelos checks da camada Gold (unicidade do grão, integridade referencial e `row_count_equals_source` contra o fan-out — ver [Validação de Dados](validacao-de-dados.md)); e **em tempo de desenvolvimento**, por testes unitários no CI (`tests/test_gold_rules.py`) que verificam o grão do fato e o tratamento de nulo de "não entregue" a cada push.
+
 ---
 
 ## Como reproduzir

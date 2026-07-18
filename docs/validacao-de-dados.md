@@ -119,3 +119,9 @@ O manifest é gravado via `boto3` (não via Spark) porque é um arquivo único e
 | Gold | 7 | 21 | 0 |
 
 O comportamento de bloqueio foi verificado com **teste negativo**: um dataset sintético com nulo em chave, duplicata e valor fora de range foi submetido às regras reais — todos os defeitos foram detectados e o `RuntimeError` foi levantado como esperado. Esse teste também expôs um problema latente de infraestrutura (mismatch de versão Python entre driver e worker), documentado em [Desafios Técnicos → nº 9](desafios-tecnicos.md).
+
+---
+
+## Proteção contra regressão
+
+As garantias deste framework não dependem de disciplina manual: estão codificadas como **testes unitários** (`tests/test_validation_checks.py`) que rodam no CI a cada push/PR — cada check detecta a violação que promete detectar, `executar_validacoes` bloqueia com `RuntimeError` usando as regras reais da config, e o checksum é independente da ordem das linhas. Há também testes de consistência (`tests/test_configs.py`) garantindo que toda regra de validação referencia tabelas/objetos que realmente existem nos registros centrais. Ver [CI/CD](ci-cd.md).

@@ -11,6 +11,7 @@ O objetivo do projeto é praticar e demonstrar, com uma stack próxima da usada 
 ![Dremio](https://img.shields.io/badge/Dremio-26.0-1F1348?logo=dremio&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![CI](https://github.com/RafaelMaciel2005/Engenharia-de-Dados/actions/workflows/ci.yml/badge.svg)](https://github.com/RafaelMaciel2005/Engenharia-de-Dados/actions/workflows/ci.yml)
 
 > ⚠️ **Projeto em desenvolvimento ativo.** Este é um projeto de portfólio e a seção [Status &amp; Roadmap](#status--roadmap) documenta com transparência o que já está funcionando e o que ainda está em construção.
 
@@ -100,6 +101,7 @@ Em todas as camadas, cada tabela passa por **checks de qualidade antes da escrit
 | Fila de tarefas | **Redis** | Broker de mensagens do Airflow (Celery-ready) |
 | Desenvolvimento | **Jupyter (PySpark Notebook)** | Sandbox para prototipagem das transformações |
 | Infraestrutura | **Docker &amp; Docker Compose** | Orquestração local de todos os serviços acima |
+| CI/CD | **GitHub Actions** | Lint, testes unitários, validação de DAGs a cada push/PR; publicação das imagens Docker no GHCR |
 
 Todos os serviços rodam em containers próprios, comunicando-se por uma rede Docker dedicada (`airflow-network`), com Dockerfiles customizados para Airflow e Spark (JDK 17, JARs de integração S3A/Hadoop-AWS, usuário non-root no Spark).
 
@@ -117,6 +119,7 @@ Os dados brutos **não são versionados neste repositório** (ver `.gitignore`);
 
 ```
 .
+├── .github/workflows/         # CI (lint + testes + validação de DAGs) e CD (imagens Docker)
 ├── infrastructure/
 │   ├── docker/
 │   │   ├── airflow/           # Dockerfile e requirements do Airflow (+ Spark client, Java 17)
@@ -131,6 +134,7 @@ Os dados brutos **não são versionados neste repositório** (ver `.gitignore`);
 │   ├── bronze/               # Sandbox de prototipagem (Landing → Bronze)
 │   ├── silver/               # Sandbox de prototipagem por tabela (Bronze → Silver)
 │   └── gold/                 # Sandbox de modelagem (Silver → Gold)
+├── tests/                    # Testes unitários (pytest + Spark local): regras, checks e consistência das configs
 ├── docs/                     # Documentação técnica (decisões, desafios, modelo dimensional, validação)
 ├── lakehouse/                # Bind mount local do MinIO (landing-zone / bronze / silver / gold / logs)
 ├── utils/                    # SparkSession compartilhada + framework de validação (checks, checksum, manifest)
@@ -188,6 +192,19 @@ No Airflow, dispare as DAGs manualmente na seguinte ordem (ainda não há uma DA
 3. `bronze_to_silver` (idem, aplicando as regras de tratamento de cada tabela)
 4. `silver_to_gold` (gera 1 task por dimensão/fato do modelo dimensional)
 
+### Rodando os testes localmente
+
+Os testes não precisam do ambiente Docker no ar — usam Spark em modo local com dados em memória (apenas Java 17 disponível no PATH):
+
+```bash
+pip install -r requirements-dev.txt
+
+ruff check .   # lint
+pytest         # testes unitários (regras, checks de validação e consistência das configs)
+```
+
+O CI executa exatamente esses comandos (mais a validação de importação das DAGs) a cada push e pull request — ver [`docs/ci-cd.md`](docs/ci-cd.md).
+
 ---
 
 ## Documentação
@@ -200,6 +217,7 @@ Além deste README, a pasta [`docs/`](docs/) reúne a documentação técnica ap
 | [Desafios Técnicos](docs/desafios-tecnicos.md) | Problemas reais e como foram resolvidos: corrupção do Postgres em bind mount no Windows, CSV multilinha do `reviews`, fan-out entre itens e pagamentos, a pegadinha do `customer_unique_id`, e outros. |
 | [Modelo Dimensional](docs/modelo-dimensional.md) | Documentação do star schema da camada Gold: grão de cada fato, dimensões, linhagem e queries de negócio com **resultados reais** (receita por estado, impacto do atraso na avaliação). |
 | [Validação de Dados](docs/validacao-de-dados.md) | O framework de qualidade do pipeline: tipos de check, falha bloqueante antes da escrita, checksum de conteúdo e o manifest de auditoria por tabela. |
+| [CI/CD](docs/ci-cd.md) | As esteiras do GitHub Actions: lint, testes com Spark local e validação de DAGs no CI; publicação de imagens versionadas no GHCR como CD. |
 
 ---
 
@@ -218,6 +236,8 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 - [x] Boas práticas de segredo: `.env` e credenciais fora do versionamento, com `.env.example` de referência
 - [x] Sem credenciais hardcoded em código: criação da `SparkSession` centralizada em `utils/spark_utils.py`, lida via variáveis de ambiente, usada tanto pelos jobs do Airflow quanto pelo notebook; conexões `spark_default`/`minio_default` definidas via `AIRFLOW_CONN_*` no `.env`
 - [x] Validação de qualidade de dados integrada às 3 camadas, com falha bloqueante antes da escrita: checks declarativos por tabela (nulos, unicidade, domínio, range, integridade referencial, fan-out), checksum de conteúdo e manifest de auditoria por execução no bucket `logs`
+- [x] Testes automatizados (pytest + Spark local): regras Silver/Gold, checks de validação e consistência entre os registros de configuração
+- [x] CI/CD via GitHub Actions: lint (`ruff`), testes e validação de importação das DAGs (DagBag) a cada push/PR; build e publicação das imagens Docker no GHCR quando a infraestrutura muda na `main`
 
 ### 🚧 Em andamento
 
@@ -226,8 +246,6 @@ Transparência sobre o estado atual do projeto — parte importante de mostrar m
 
 ### 📋 Planejado
 
-- [ ] Testes automatizados das transformações Spark (pytest)
-- [ ] Pipeline de CI (lint + testes + build das imagens) via GitHub Actions
 - [ ] Camada de consumo/BI conectada ao Dremio (Metabase ou Superset)
 - [ ] Estratégia de escrita incremental/particionada (hoje as escritas são full overwrite)
 - [ ] Deploy em Kubernetes (estrutura já reservada em `infrastructure/kubernetes/`)

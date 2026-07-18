@@ -1,0 +1,6 @@
+# Dependencias de desenvolvimento (lint e testes) — usadas localmente e no CI.
+# O pyspark e fixado na MESMA versao do cluster (ver infrastructure/docker),
+# para que os testes exercitem o comportamento real do runtime.
+pyspark==3.5.1
+pytest==8.3.4
+ruff==0.8.4
