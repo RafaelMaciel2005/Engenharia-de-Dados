@@ -49,7 +49,7 @@ Os checks do CI não ficam só "informativos": a branch `main` está protegida e
 | PR para `main` tocando `infrastructure/docker/**` | **Builda** as imagens (Airflow e Spark) — valida que os Dockerfiles continuam construindo, sem publicar nada |
 | Push na `main` tocando `infrastructure/docker/**` | Builda e **publica** no GitHub Container Registry: `ghcr.io/rafaelmaciel2005/olist-lakehouse-{airflow,spark}` com tags `latest` e o SHA do commit |
 
-O build usa cache de camadas entre execuções (`type=gha`) porque o download do Spark dentro do Dockerfile é pesado (~400 MB) — sem cache, cada build repetiria tudo.
+Tanto a imagem do Airflow quanto a do Spark trazem a distribuição do Spark da imagem **oficial `apache/spark:3.5.1`** (via multi-stage `COPY`), em vez de baixar o tarball do `archive.apache.org` — o mirror de arquivo é lento e chegava a pendurar o build (ver [Desafios Técnicos → nº 9](desafios-tecnicos.md)). O build ainda usa cache de camadas entre execuções (`type=gha`) para não repetir o `pip install` (o `pyspark` do PyPI é um sdist de ~317 MB) a cada rodada.
 
 ### Por que isso é o "CD" do projeto
 
